@@ -1,10 +1,60 @@
 use anyhow::Result;
+use crossterm::execute;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::core::v1::{Namespace, Pod, Service};
 use kube::{
     api::{Api, DeleteParams, ListParams, LogParams},
     Client,
 };
+use serde::Deserialize;
+use std::fs;
+use std::io;
+use std::path::PathBuf;
+use std::process::Command;
+
+#[derive(Debug, Clone, Deserialize)]
+struct KubeConfig {
+    #[serde(rename = "current-context")]
+    current_context: String,
+    contexts: Vec<ContextEntry>,
+    clusters: Vec<ClusterEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ContextEntry {
+    name: String,
+    context: ContextDetail,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ContextDetail {
+    cluster: String,
+    #[serde(default)]
+    namespace: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ClusterEntry {
+    name: String,
+    cluster: ClusterDetail,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ClusterDetail {
+    server: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextInfo {
+    pub name: String,
+    pub cluster: String,
+    pub server: String,
+    pub namespace: String,
+    pub is_current: bool,
+}
 
 #[derive(Clone)]
 pub struct KubeClient {
@@ -15,6 +65,128 @@ impl KubeClient {
     pub async fn new() -> Result<Self> {
         let client = Client::try_default().await?;
         Ok(Self { client })
+    }
+
+    fn get_kubeconfig_path() -> PathBuf {
+        if let Ok(path) = std::env::var("KUBECONFIG") {
+            PathBuf::from(path)
+        } else {
+            let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+            home.push(".kube");
+            home.push("config");
+            home
+        }
+    }
+
+    pub fn list_contexts() -> Result<Vec<ContextInfo>> {
+        let config_path = Self::get_kubeconfig_path();
+        let config_content = fs::read_to_string(&config_path)?;
+        let kubeconfig: KubeConfig = serde_yaml::from_str(&config_content)?;
+
+        let current_context = kubeconfig.current_context.clone();
+
+        let mut contexts = Vec::new();
+        for ctx in kubeconfig.contexts {
+            let server = kubeconfig
+                .clusters
+                .iter()
+                .find(|c| c.name == ctx.context.cluster)
+                .map(|c| c.cluster.server.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+
+            contexts.push(ContextInfo {
+                name: ctx.name.clone(),
+                cluster: ctx.context.cluster,
+                server,
+                namespace: if ctx.context.namespace.is_empty() {
+                    "default".to_string()
+                } else {
+                    ctx.context.namespace
+                },
+                is_current: ctx.name == current_context,
+            });
+        }
+
+        Ok(contexts)
+    }
+
+    pub fn get_current_context() -> Result<String> {
+        let config_path = Self::get_kubeconfig_path();
+        let config_content = fs::read_to_string(&config_path)?;
+        let kubeconfig: KubeConfig = serde_yaml::from_str(&config_content)?;
+        Ok(kubeconfig.current_context)
+    }
+
+    pub fn switch_context(context_name: &str) -> Result<()> {
+        let output = Command::new("kubectl")
+            .arg("config")
+            .arg("use-context")
+            .arg(context_name)
+            .output()?;
+
+        if !output.status.success() {
+            let error_msg = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Failed to switch context: {}", error_msg);
+        }
+
+        Ok(())
+    }
+
+    pub fn exec_into_pod(namespace: &str, pod_name: &str) -> Result<()> {
+        use std::process::Stdio;
+
+        // Suspend the TUI before exec
+        disable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, LeaveAlternateScreen)?;
+
+        // Try /bin/sh first
+        let status = Command::new("kubectl")
+            .arg("exec")
+            .arg("-it")
+            .arg("-n")
+            .arg(namespace)
+            .arg(pod_name)
+            .arg("--")
+            .arg("/bin/sh")
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status();
+
+        let success = match status {
+            Ok(s) if s.success() => true,
+            _ => {
+                // Try bash if sh fails
+                let bash_status = Command::new("kubectl")
+                    .arg("exec")
+                    .arg("-it")
+                    .arg("-n")
+                    .arg(namespace)
+                    .arg(pod_name)
+                    .arg("--")
+                    .arg("/bin/bash")
+                    .stdin(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .status();
+
+                match bash_status {
+                    Ok(s) => s.success(),
+                    Err(_) => false,
+                }
+            }
+        };
+
+        // Restore the TUI after exec
+        execute!(io::stdout(), EnterAlternateScreen)?;
+        enable_raw_mode()?;
+
+        if !success {
+            anyhow::bail!("Failed to exec into pod. Pod may not have /bin/sh or /bin/bash");
+        }
+
+        Ok(())
     }
 
     pub async fn list_namespaces(&self) -> Result<Vec<String>> {

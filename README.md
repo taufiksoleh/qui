@@ -8,11 +8,15 @@ A powerful terminal user interface (TUI) for managing Kubernetes clusters, writt
 
 ## Features
 
-- **Pod Management**: View, monitor, and delete pods with real-time status updates
+- **Multi-Cluster Support**: View and switch between Kubernetes contexts/clusters
+- **Cluster Overview**: Display all available contexts with connection indicator
+- **Namespace Browser**: Dedicated view to list and switch between namespaces
+- **Pod Management**: View, monitor, delete pods, and exec into containers
+- **Interactive Shell**: Execute commands directly inside pods with `e` key
 - **Deployment Management**: List deployments, scale replicas, and delete deployments
 - **Service Viewing**: Browse Kubernetes services with detailed information
-- **Log Viewer**: View pod logs directly in the terminal (last 100 lines)
-- **Namespace Switching**: Quickly switch between namespaces
+- **Log Viewer**: View pod logs directly in the terminal with real-time following (last 100 lines, auto-refresh)
+- **Built-in Help**: Comprehensive help screen accessible with `?` or `h`
 - **Interactive Navigation**: Vim-style keybindings (j/k) and arrow key support
 - **Resource Operations**: Delete pods and deployments, scale deployments
 - **Fast & Lightweight**: Built with Rust for maximum performance
@@ -103,6 +107,31 @@ Launch the application:
 cargo run --release
 ```
 
+For detailed usage instructions, see [USAGE.md](USAGE.md).
+
+### Quick Start
+
+#### Switching Between Clusters/Contexts
+1. Press `4` to view all available clusters
+2. Use `↑`/`↓` to select a cluster
+3. Press `Enter` to switch to that cluster
+4. Current cluster is marked with ▶ and highlighted in green
+
+#### Switching Between Namespaces
+1. Press `5` or `n` to view all namespaces
+2. Use `↑`/`↓` to select a namespace
+3. Press `Enter` to switch
+4. Current namespace is marked with ▶ and highlighted in yellow
+
+#### Accessing Pod Shell
+1. Press `1` to view pods
+2. Select a pod with `↑`/`↓`
+3. Press `e` to exec into the pod
+4. Type `exit` to return to the TUI
+
+#### Getting Help
+- Press `?` or `h` anytime to see the full help screen
+
 ### Keyboard Shortcuts
 
 #### Global Navigation
@@ -110,29 +139,59 @@ cargo run --release
 - `1` - Switch to Pods view
 - `2` - Switch to Deployments view
 - `3` - Switch to Services view
-- `n` - Change namespace (opens input prompt)
+- `4` - Switch to Clusters/Contexts view
+- `5`/`n` - Switch to Namespaces view
+- `?`/`h` - Show help screen
 - `r` - Refresh current view
 - `↑` or `k` - Move selection up
 - `↓` or `j` - Move selection down
+- `Esc` - Back/Close (returns to previous view or closes dialogs)
 
 #### Pods View
 - `l` - View logs for selected pod
+- `e` - Exec into pod (open interactive shell)
 - `d` - Delete selected pod
 
 #### Deployments View
 - `s` - Scale deployment (opens replica count prompt)
 - `d` - Delete selected deployment
 
+#### Clusters View
+- `Enter` - Switch to selected context/cluster
+
+#### Namespaces View
+- `Enter` - Switch to selected namespace
+
+#### Help View
+- `Esc` - Close help and return to previous view
+
 #### Logs View
+- `↑`/`k` - Scroll up
+- `↓`/`j` - Scroll down
 - `Esc` - Return to previous view
 
-#### Input Prompts
+#### Input Prompts (Scale)
 - `Enter` - Confirm input
 - `Esc` - Cancel input
 - `Backspace` - Delete character
-- `↑/↓` - Navigate suggestions (namespace selector)
 
 ## Features Overview
+
+### Clusters View
+Displays all available Kubernetes contexts from your kubeconfig with:
+- Context name (with ▶ indicator for current context)
+- Cluster name
+- API server URL
+- Default namespace
+- Visual highlighting of the active context in green
+- Press `Enter` to switch contexts seamlessly
+
+### Namespaces View
+Shows all namespaces in the current cluster with:
+- Full list of available namespaces
+- Current namespace marked with ▶ and highlighted in yellow
+- Simple Enter-to-switch interaction
+- No typing required - just navigate and select
 
 ### Pods View
 Displays all pods in the current namespace with:
@@ -160,20 +219,22 @@ Lists services with:
 
 ### Logs View
 - Displays the last 100 lines of logs from a selected pod
-- Scrollable view for reviewing application output
+- Full scrolling support with arrow keys or vim-style j/k navigation
+- Real-time log following with `f` key - auto-refresh every 2 seconds
+- Shows current line position and `[FOLLOW]` indicator in title bar
 - Quick access with `l` key from pods view
+- Manual scrolling automatically pauses follow mode
 
 ## Configuration
 
-Kube-TUI uses your default Kubernetes configuration:
-- Config file: `~/.kube/config`
-- Context: Uses the current context
+Kube-TUI uses your Kubernetes configuration:
+- Config file: `~/.kube/config` or path from `$KUBECONFIG` environment variable
+- Context: Uses the current context (can be switched from within the app using `4`)
 - Authentication: Inherits from kubectl configuration
 
-To use a different context:
-```bash
-kubectl config use-context <context-name>
-```
+You can switch contexts either:
+1. **From within the app**: Press `4`, select a context, press `Enter`
+2. **From command line**: `kubectl config use-context <context-name>` (then restart the app)
 
 ## Architecture
 
@@ -229,5 +290,5 @@ Potential features for future releases:
 - Exec into containers
 - YAML editing and apply
 - Resource describe view
-- Multi-cluster support
 - Custom themes
+- CRD (Custom Resource Definition) support

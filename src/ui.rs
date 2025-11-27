@@ -24,19 +24,26 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 }
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
-    let title = vec![
-        Span::styled(
-            "Kubernetes TUI",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" | "),
-        Span::styled(
-            format!("Namespace: {}", app.current_namespace),
-            Style::default().fg(Color::Yellow),
-        ),
-    ];
+    let mut title = vec![Span::styled(
+        "Kubernetes TUI",
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )];
+
+    if !app.current_context.is_empty() {
+        title.push(Span::raw(" | "));
+        title.push(Span::styled(
+            format!("Context: {}", app.current_context),
+            Style::default().fg(Color::Green),
+        ));
+    }
+
+    title.push(Span::raw(" | "));
+    title.push(Span::styled(
+        format!("Namespace: {}", app.current_namespace),
+        Style::default().fg(Color::Yellow),
+    ));
 
     let header = Paragraph::new(Line::from(title)).block(Block::default().borders(Borders::ALL));
 
@@ -49,6 +56,9 @@ fn render_main_content(f: &mut Frame, app: &App, area: Rect) {
         View::Deployments => render_deployments_view(f, app, area),
         View::Services => render_services_view(f, app, area),
         View::Logs => render_logs_view(f, app, area),
+        View::Clusters => render_clusters_view(f, app, area),
+        View::Namespaces => render_namespaces_view(f, app, area),
+        View::Help => render_help_view(f, app, area),
     }
 }
 
@@ -209,16 +219,236 @@ fn render_services_view(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_logs_view(f: &mut Frame, app: &App, area: Rect) {
+    let total_lines = app.logs.lines().count();
+    let follow_indicator = if app.logs_follow { " [FOLLOW]" } else { "" };
+    let title = format!(
+        "Pod Logs (Last 100 lines) - Line {}/{}{} - Press 'f' to toggle follow",
+        app.logs_scroll + 1,
+        total_lines.max(1),
+        follow_indicator
+    );
+
     let logs = Paragraph::new(app.logs.clone())
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Pod Logs (Last 100 lines)")
+                .title(title)
+                .style(Style::default()),
+        )
+        .wrap(Wrap { trim: false })
+        .scroll((app.logs_scroll as u16, 0));
+
+    f.render_widget(logs, area);
+}
+
+fn render_clusters_view(f: &mut Frame, app: &App, area: Rect) {
+    let header_cells = ["CONTEXT", "CLUSTER", "SERVER", "NAMESPACE"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow)));
+
+    let header = Row::new(header_cells)
+        .style(Style::default())
+        .height(1)
+        .bottom_margin(1);
+
+    let rows = app.contexts.iter().enumerate().map(|(i, ctx)| {
+        let mut cells = vec![
+            Cell::from(ctx.name.clone()),
+            Cell::from(ctx.cluster.clone()),
+            Cell::from(ctx.server.clone()),
+            Cell::from(ctx.namespace.clone()),
+        ];
+
+        // Add a visual indicator for the current context
+        if ctx.is_current {
+            cells[0] = Cell::from(format!("▶ {}", ctx.name));
+        }
+
+        let style = if i == app.context_index {
+            Style::default()
+                .bg(Color::DarkGray)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+        } else if ctx.is_current {
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        Row::new(cells).style(style).height(1)
+    });
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(35),
+            Constraint::Percentage(15),
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Clusters / Contexts")
+            .style(Style::default()),
+    );
+
+    f.render_widget(table, area);
+}
+
+fn render_namespaces_view(f: &mut Frame, app: &App, area: Rect) {
+    let header_cells = ["NAMESPACE"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow)));
+
+    let header = Row::new(header_cells)
+        .style(Style::default())
+        .height(1)
+        .bottom_margin(1);
+
+    let rows = app.namespaces.iter().enumerate().map(|(i, ns)| {
+        let mut name = ns.clone();
+
+        // Add indicator for current namespace
+        if ns == &app.current_namespace {
+            name = format!("▶ {}", ns);
+        }
+
+        let cells = vec![Cell::from(name)];
+
+        let style = if i == app.namespace_index {
+            Style::default()
+                .bg(Color::DarkGray)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+        } else if ns == &app.current_namespace {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        Row::new(cells).style(style).height(1)
+    });
+
+    let table = Table::new(rows, [Constraint::Percentage(100)])
+        .header(header)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Namespaces")
+                .style(Style::default()),
+        );
+
+    f.render_widget(table, area);
+}
+
+fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
+    let help_text = vec![
+        Line::from(vec![Span::styled(
+            "Kube-TUI Quick Reference",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Navigation:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  1 - Pods View          │  List all pods in current namespace"),
+        Line::from("  2 - Deployments View   │  List all deployments"),
+        Line::from("  3 - Services View      │  List all services"),
+        Line::from("  4 - Clusters View      │  List all contexts/clusters"),
+        Line::from("  5/n - Namespaces View  │  List all namespaces"),
+        Line::from("  ?/h - Help View        │  This help screen"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Pod Operations:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  l - View Logs          │  Show last 100 lines of pod logs"),
+        Line::from("  e - Exec into Pod      │  Open interactive shell in pod"),
+        Line::from("  d - Delete Pod         │  Delete selected pod"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Deployment Operations:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  s - Scale              │  Change replica count"),
+        Line::from("  d - Delete             │  Delete selected deployment"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Context & Namespace:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  Enter - Switch         │  Switch to selected cluster/namespace"),
+        Line::from("  Current items marked with ▶ and highlighted"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Logs View:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  ↑/k - Scroll Up        │  Scroll logs up one line"),
+        Line::from("  ↓/j - Scroll Down      │  Scroll logs down one line"),
+        Line::from("  f - Follow Mode        │  Toggle real-time log following"),
+        Line::from("  Esc - Back             │  Return to pods view"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "General:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  r - Refresh            │  Reload current view data"),
+        Line::from("  ↑/k - Move Up          │  Navigate selection up (or scroll in logs)"),
+        Line::from("  ↓/j - Move Down        │  Navigate selection down (or scroll in logs)"),
+        Line::from("  Esc - Back/Close       │  Return to previous view"),
+        Line::from("  q - Quit               │  Exit application"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Tips:",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  • Header shows current context and namespace"),
+        Line::from("  • Footer shows available commands for current view"),
+        Line::from("  • Status messages appear in green (success) or red (error)"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Press Esc to close this help",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::ITALIC),
+        )]),
+    ];
+
+    let paragraph = Paragraph::new(help_text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Help")
                 .style(Style::default()),
         )
         .wrap(Wrap { trim: false });
 
-    f.render_widget(logs, area);
+    f.render_widget(paragraph, area);
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
@@ -260,17 +490,6 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 .block(Block::default().borders(Borders::ALL));
 
             f.render_widget(help, chunks[1]);
-        }
-        InputMode::Namespace => {
-            let input = Paragraph::new(app.input_buffer.clone())
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Enter Namespace (Esc to cancel)"),
-                )
-                .style(Style::default().fg(Color::Yellow));
-
-            f.render_widget(input, chunks[1]);
         }
         InputMode::Scale => {
             let input = Paragraph::new(app.input_buffer.clone())

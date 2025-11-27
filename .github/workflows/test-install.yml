@@ -228,6 +228,7 @@ jobs:
           fi
 
           # Test 3: Default directory is now user home
+          unset INSTALL_DIR
           INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
           if [[ "$INSTALL_DIR" == *"$HOME"* ]]; then
             echo "✓ Default directory uses user home: $INSTALL_DIR"

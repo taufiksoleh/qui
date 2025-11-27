@@ -11,6 +11,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+use std::time::{Duration, Instant};
 
 use app::App;
 use events::EventHandler;
@@ -50,9 +51,17 @@ async fn run_app<B: ratatui::backend::Backend>(
     mut app: App,
 ) -> Result<()> {
     let mut event_handler = EventHandler::new();
+    let mut last_log_refresh = Instant::now();
+    let log_refresh_interval = Duration::from_secs(2); // Refresh logs every 2 seconds
 
     loop {
         terminal.draw(|f| ui(f, &mut app))?;
+
+        // Refresh logs if in follow mode and enough time has passed
+        if last_log_refresh.elapsed() >= log_refresh_interval {
+            app.refresh_logs().await?;
+            last_log_refresh = Instant::now();
+        }
 
         if let Some(event) = event_handler.next()? {
             if !app.handle_event(event).await? {

@@ -15,7 +15,7 @@ A powerful terminal user interface (TUI) for managing Kubernetes clusters, writt
 - **Interactive Shell**: Execute commands directly inside pods with `e` key
 - **Deployment Management**: List deployments, scale replicas, and delete deployments
 - **Service Viewing**: Browse Kubernetes services with detailed information
-- **Log Viewer**: View pod logs directly in the terminal (last 100 lines)
+- **Log Viewer**: View pod logs directly in the terminal with real-time following (last 100 lines, auto-refresh)
 - **Built-in Help**: Comprehensive help screen accessible with `?` or `h`
 - **Interactive Navigation**: Vim-style keybindings (j/k) and arrow key support
 - **Resource Operations**: Delete pods and deployments, scale deployments
@@ -220,8 +220,10 @@ Lists services with:
 ### Logs View
 - Displays the last 100 lines of logs from a selected pod
 - Full scrolling support with arrow keys or vim-style j/k navigation
-- Shows current line position in title bar
+- Real-time log following with `f` key - auto-refresh every 2 seconds
+- Shows current line position and `[FOLLOW]` indicator in title bar
 - Quick access with `l` key from pods view
+- Manual scrolling automatically pauses follow mode
 
 ## Configuration
 

@@ -38,6 +38,8 @@ pub struct App {
     pub service_index: usize,
     pub logs: String,
     pub logs_scroll: usize,
+    pub logs_follow: bool,
+    pub logs_pod_name: Option<String>,
     pub error_message: Option<String>,
     pub input_mode: InputMode,
     pub input_buffer: String,
@@ -73,6 +75,8 @@ impl App {
             service_index: 0,
             logs: String::new(),
             logs_scroll: 0,
+            logs_follow: false,
+            logs_pod_name: None,
             error_message: None,
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
@@ -127,6 +131,11 @@ impl App {
                     self.view_pod_logs().await?;
                 }
             }
+            KeyCode::Char('f') => {
+                if self.current_view == View::Logs {
+                    self.toggle_log_follow();
+                }
+            }
             KeyCode::Char('e') => {
                 if self.current_view == View::Pods {
                     self.exec_into_pod().await?;
@@ -147,6 +156,9 @@ impl App {
             }
             KeyCode::Esc => {
                 if self.current_view == View::Help {
+                    self.current_view = View::Pods;
+                } else if self.current_view == View::Logs {
+                    self.logs_follow = false;
                     self.current_view = View::Pods;
                 }
             }
@@ -230,6 +242,7 @@ impl App {
             View::Logs => {
                 if self.logs_scroll > 0 {
                     self.logs_scroll -= 1;
+                    self.logs_follow = false; // Disable follow when manually scrolling
                 }
             }
             View::Help => {}
@@ -267,6 +280,7 @@ impl App {
                 let log_lines = self.logs.lines().count();
                 if self.logs_scroll < log_lines.saturating_sub(1) {
                     self.logs_scroll += 1;
+                    self.logs_follow = false; // Disable follow when manually scrolling
                 }
             }
             View::Help => {}
@@ -385,10 +399,46 @@ impl App {
                 Ok(logs) => {
                     self.logs = logs;
                     self.logs_scroll = 0; // Reset scroll position
+                    self.logs_pod_name = Some(pod.name.clone()); // Store pod name for follow mode
                     self.current_view = View::Logs;
                 }
                 Err(e) => {
                     self.error_message = Some(format!("Failed to get logs: {}", e));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn toggle_log_follow(&mut self) {
+        self.logs_follow = !self.logs_follow;
+        if self.logs_follow {
+            // Scroll to bottom when enabling follow mode
+            let log_lines = self.logs.lines().count();
+            self.logs_scroll = log_lines.saturating_sub(1);
+            self.status_message = "Log follow mode enabled (press 'f' to disable)".to_string();
+        } else {
+            self.status_message = "Log follow mode disabled".to_string();
+        }
+    }
+
+    pub async fn refresh_logs(&mut self) -> Result<()> {
+        if self.logs_follow && self.current_view == View::Logs {
+            if let Some(pod_name) = &self.logs_pod_name.clone() {
+                match self
+                    .client
+                    .get_pod_logs(&self.current_namespace, pod_name)
+                    .await
+                {
+                    Ok(logs) => {
+                        self.logs = logs;
+                        // Auto-scroll to bottom in follow mode
+                        let log_lines = self.logs.lines().count();
+                        self.logs_scroll = log_lines.saturating_sub(1);
+                    }
+                    Err(_) => {
+                        // Silently ignore errors in background refresh
+                    }
                 }
             }
         }
@@ -494,6 +544,7 @@ impl App {
             }
             View::Logs => {
                 help.push(("↑/↓", "Scroll"));
+                help.push(("f", "Follow"));
                 help.push(("Esc", "Back"));
             }
             View::Help => {

@@ -220,10 +220,12 @@ fn render_services_view(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_logs_view(f: &mut Frame, app: &App, area: Rect) {
     let total_lines = app.logs.lines().count();
+    let follow_indicator = if app.logs_follow { " [FOLLOW]" } else { "" };
     let title = format!(
-        "Pod Logs (Last 100 lines) - Line {}/{} - Use ↑/↓ to scroll",
+        "Pod Logs (Last 100 lines) - Line {}/{}{} - Press 'f' to toggle follow",
         app.logs_scroll + 1,
-        total_lines.max(1)
+        total_lines.max(1),
+        follow_indicator
     );
 
     let logs = Paragraph::new(app.logs.clone())
@@ -406,6 +408,7 @@ fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
         )]),
         Line::from("  ↑/k - Scroll Up        │  Scroll logs up one line"),
         Line::from("  ↓/j - Scroll Down      │  Scroll logs down one line"),
+        Line::from("  f - Follow Mode        │  Toggle real-time log following"),
         Line::from("  Esc - Back             │  Return to pods view"),
         Line::from(""),
         Line::from(vec![Span::styled(

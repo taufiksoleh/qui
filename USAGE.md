@@ -81,9 +81,17 @@ Shows a comprehensive quick reference guide with all available commands organize
 |-----|--------|-------------|
 | `↑` or `k` | Scroll Up | Scroll logs up one line |
 | `↓` or `j` | Scroll Down | Scroll logs down one line |
+| `f` | Follow Mode | Toggle real-time log following |
 | `Esc` | Back | Return to previous view |
 
 The Logs view displays pod logs with full scrolling support. Navigate through long log files using arrow keys or vim-style j/k keys. The title bar shows your current position (e.g., "Line 45/200").
+
+**Real-time Log Following:**
+- Press `f` to enable follow mode - logs will automatically update every 2 seconds
+- When follow mode is active, the title bar shows `[FOLLOW]` indicator
+- The view automatically scrolls to the bottom as new logs arrive
+- Manual scrolling (↑/↓) automatically disables follow mode
+- Press `f` again to disable follow mode
 
 ## How to Switch Between Contexts (Clusters)
 

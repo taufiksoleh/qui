@@ -15,11 +15,35 @@ A powerful terminal user interface (TUI) for managing Kubernetes clusters, writt
 
 ## Prerequisites
 
-- Rust 1.70 or later
 - Access to a Kubernetes cluster
 - kubectl configured with valid credentials (uses your default kubeconfig)
+- (For building from source) Rust 1.70 or later
 
 ## Installation
+
+### Download pre-built binaries (Recommended)
+
+Pre-built binaries are available for Linux and macOS on the [releases page](https://github.com/yourusername/qui/releases).
+
+**Linux (x86_64):**
+```bash
+curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-linux-x86_64.tar.gz | tar xz
+sudo mv kube-tui /usr/local/bin/
+```
+
+**macOS (Intel):**
+```bash
+curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-macos-x86_64.tar.gz | tar xz
+sudo mv kube-tui /usr/local/bin/
+```
+
+**macOS (Apple Silicon):**
+```bash
+curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-macos-aarch64.tar.gz | tar xz
+sudo mv kube-tui /usr/local/bin/
+```
+
+See [RELEASE.md](RELEASE.md) for more installation options and platform-specific instructions.
 
 ### Build from source
 

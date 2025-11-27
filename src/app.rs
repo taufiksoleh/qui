@@ -11,12 +11,13 @@ pub enum View {
     Services,
     Logs,
     Clusters,
+    Namespaces,
+    Help,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InputMode {
     Normal,
-    Namespace,
     Scale,
 }
 
@@ -83,7 +84,6 @@ impl App {
     pub async fn handle_event(&mut self, event: InputEvent) -> Result<bool> {
         match self.input_mode {
             InputMode::Normal => self.handle_normal_mode(event).await,
-            InputMode::Namespace => self.handle_namespace_mode(event).await,
             InputMode::Scale => self.handle_scale_mode(event).await,
         }
     }
@@ -107,9 +107,12 @@ impl App {
                 self.current_view = View::Clusters;
                 self.refresh_current_view().await?;
             }
-            KeyCode::Char('n') => {
-                self.input_mode = InputMode::Namespace;
-                self.input_buffer.clear();
+            KeyCode::Char('5') | KeyCode::Char('n') => {
+                self.current_view = View::Namespaces;
+                self.refresh_current_view().await?;
+            }
+            KeyCode::Char('?') | KeyCode::Char('h') => {
+                self.current_view = View::Help;
             }
             KeyCode::Char('r') => {
                 self.refresh_current_view().await?;
@@ -122,6 +125,11 @@ impl App {
                     self.view_pod_logs().await?;
                 }
             }
+            KeyCode::Char('e') => {
+                if self.current_view == View::Pods {
+                    self.exec_into_pod().await?;
+                }
+            }
             KeyCode::Char('s') => {
                 if self.current_view == View::Deployments {
                     self.input_mode = InputMode::Scale;
@@ -129,8 +137,15 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                if self.current_view == View::Clusters {
-                    self.switch_to_selected_context().await?;
+                match self.current_view {
+                    View::Clusters => self.switch_to_selected_context().await?,
+                    View::Namespaces => self.switch_to_selected_namespace().await?,
+                    _ => {}
+                }
+            }
+            KeyCode::Esc => {
+                if self.current_view == View::Help {
+                    self.current_view = View::Pods;
                 }
             }
             KeyCode::Up | KeyCode::Char('k') => {
@@ -138,47 +153,6 @@ impl App {
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.move_selection_down();
-            }
-            _ => {}
-        }
-        Ok(true)
-    }
-
-    async fn handle_namespace_mode(&mut self, event: InputEvent) -> Result<bool> {
-        match event.key_code() {
-            KeyCode::Esc => {
-                self.input_mode = InputMode::Normal;
-                self.input_buffer.clear();
-            }
-            KeyCode::Enter => {
-                if !self.input_buffer.is_empty() {
-                    self.current_namespace = self.input_buffer.clone();
-                    self.input_mode = InputMode::Normal;
-                    self.input_buffer.clear();
-                    self.refresh_current_view().await?;
-                }
-            }
-            KeyCode::Char(c) => {
-                self.input_buffer.push(c);
-            }
-            KeyCode::Backspace => {
-                self.input_buffer.pop();
-            }
-            KeyCode::Up => {
-                if self.namespace_index > 0 {
-                    self.namespace_index -= 1;
-                    if let Some(ns) = self.namespaces.get(self.namespace_index) {
-                        self.input_buffer = ns.clone();
-                    }
-                }
-            }
-            KeyCode::Down => {
-                if self.namespace_index < self.namespaces.len().saturating_sub(1) {
-                    self.namespace_index += 1;
-                    if let Some(ns) = self.namespaces.get(self.namespace_index) {
-                        self.input_buffer = ns.clone();
-                    }
-                }
             }
             _ => {}
         }
@@ -246,7 +220,12 @@ impl App {
                     self.context_index -= 1;
                 }
             }
-            View::Logs => {}
+            View::Namespaces => {
+                if self.namespace_index > 0 {
+                    self.namespace_index -= 1;
+                }
+            }
+            View::Logs | View::Help => {}
         }
     }
 
@@ -272,7 +251,12 @@ impl App {
                     self.context_index += 1;
                 }
             }
-            View::Logs => {}
+            View::Namespaces => {
+                if self.namespace_index < self.namespaces.len().saturating_sub(1) {
+                    self.namespace_index += 1;
+                }
+            }
+            View::Logs | View::Help => {}
         }
     }
 
@@ -325,7 +309,13 @@ impl App {
                     self.error_message = Some(format!("Failed to list contexts: {}", e));
                 }
             },
-            View::Logs => {}
+            View::Namespaces => {
+                // Namespaces are already loaded, just ensure index is valid
+                if self.namespace_index >= self.namespaces.len() {
+                    self.namespace_index = self.namespaces.len().saturating_sub(1);
+                }
+            }
+            View::Logs | View::Help => {}
         }
         Ok(())
     }
@@ -434,6 +424,30 @@ impl App {
         Ok(())
     }
 
+    async fn switch_to_selected_namespace(&mut self) -> Result<()> {
+        if let Some(namespace) = self.namespaces.get(self.namespace_index) {
+            self.current_namespace = namespace.clone();
+            self.status_message = format!("Switched to namespace: {}", namespace);
+            self.current_view = View::Pods;
+            self.refresh_current_view().await?;
+        }
+        Ok(())
+    }
+
+    async fn exec_into_pod(&mut self) -> Result<()> {
+        if let Some(pod) = self.pods.get(self.pod_index) {
+            match KubeClient::exec_into_pod(&self.current_namespace, &pod.name) {
+                Ok(_) => {
+                    self.status_message = format!("Exited shell for pod: {}", pod.name);
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to exec into pod: {}", e));
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_help_text(&self) -> Vec<(&str, &str)> {
         let mut help = vec![
             ("q", "Quit"),
@@ -441,7 +455,8 @@ impl App {
             ("2", "Deployments"),
             ("3", "Services"),
             ("4", "Clusters"),
-            ("n", "Change Namespace"),
+            ("5/n", "Namespaces"),
+            ("?/h", "Help"),
             ("r", "Refresh"),
             ("↑/k", "Up"),
             ("↓/j", "Down"),
@@ -449,18 +464,25 @@ impl App {
 
         match self.current_view {
             View::Pods => {
-                help.push(("l", "View Logs"));
-                help.push(("d", "Delete Pod"));
+                help.push(("l", "Logs"));
+                help.push(("e", "Exec"));
+                help.push(("d", "Delete"));
             }
             View::Deployments => {
                 help.push(("s", "Scale"));
                 help.push(("d", "Delete"));
             }
             View::Clusters => {
-                help.push(("Enter", "Switch Context"));
+                help.push(("Enter", "Switch"));
+            }
+            View::Namespaces => {
+                help.push(("Enter", "Switch"));
             }
             View::Logs => {
                 help.push(("Esc", "Back"));
+            }
+            View::Help => {
+                help.push(("Esc", "Close"));
             }
             _ => {}
         }

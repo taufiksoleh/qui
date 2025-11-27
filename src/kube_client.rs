@@ -127,6 +127,45 @@ impl KubeClient {
         Ok(())
     }
 
+    pub fn exec_into_pod(namespace: &str, pod_name: &str) -> Result<()> {
+        use std::process::Stdio;
+
+        let status = Command::new("kubectl")
+            .arg("exec")
+            .arg("-it")
+            .arg("-n")
+            .arg(namespace)
+            .arg(pod_name)
+            .arg("--")
+            .arg("/bin/sh")
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()?;
+
+        if !status.success() {
+            // Try bash if sh fails
+            let status = Command::new("kubectl")
+                .arg("exec")
+                .arg("-it")
+                .arg("-n")
+                .arg(namespace)
+                .arg(pod_name)
+                .arg("--")
+                .arg("/bin/bash")
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()?;
+
+            if !status.success() {
+                anyhow::bail!("Failed to exec into pod. Pod may not have /bin/sh or /bin/bash");
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn list_namespaces(&self) -> Result<Vec<String>> {
         let api: Api<Namespace> = Api::all(self.client.clone());
         let namespaces = api.list(&ListParams::default()).await?;

@@ -21,10 +21,12 @@ The application will automatically connect to your current Kubernetes context an
 | `2` | Deployments View | Switch to Deployments view |
 | `3` | Services View | Switch to Services view |
 | `4` | Clusters View | Switch to Clusters/Contexts view |
-| `n` | Change Namespace | Open namespace selection prompt |
+| `5` or `n` | Namespaces View | Switch to Namespaces view |
+| `?` or `h` | Help | Show help screen with all commands |
 | `r` | Refresh | Reload current view data |
 | `↑` or `k` | Move Up | Move selection cursor up |
 | `↓` or `j` | Move Down | Move selection cursor down |
+| `Esc` | Back/Close | Return to previous view or close dialogs |
 
 ## View-Specific Commands
 
@@ -33,6 +35,7 @@ The application will automatically connect to your current Kubernetes context an
 | Key | Action | Description |
 |-----|--------|-------------|
 | `l` | View Logs | Display logs for selected pod (last 100 lines) |
+| `e` | Exec into Pod | Open interactive shell in the selected pod |
 | `d` | Delete | Delete the selected pod |
 
 ### Deployments View (Press `2`)
@@ -59,6 +62,18 @@ The Clusters view displays:
 - **NAMESPACE**: Default namespace for the context
 
 **Note**: The currently connected context is highlighted in green with a ▶ arrow indicator.
+
+### Namespaces View (Press `5` or `n`)
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| `Enter` | Switch Namespace | Switch to the selected namespace |
+
+The Namespaces view displays all available namespaces in the current cluster. The current namespace is marked with ▶ and highlighted in yellow.
+
+### Help View (Press `?` or `h`)
+
+Shows a comprehensive quick reference guide with all available commands organized by category. Press `Esc` to close.
 
 ### Logs View
 
@@ -87,41 +102,43 @@ Navigate with ↑/↓, press Enter to switch
 
 ## How to Switch Between Namespaces
 
-1. Press `n` to open the namespace prompt
-2. Start typing the namespace name
-3. Use `↑`/`↓` arrows to autocomplete from available namespaces
-4. Press `Enter` to confirm, or `Esc` to cancel
+1. Press `5` or `n` to open the Namespaces view
+2. Use `↑`/`↓` or `k`/`j` to navigate to the desired namespace
+3. Press `Enter` to switch to that namespace
+4. You'll automatically return to the Pods view with the new namespace active
 
 **Example:**
 ```
-┌─ Enter Namespace (Esc to cancel) ───────────┐
-│ kube-system                                  │
-└──────────────────────────────────────────────┘
+┌─ Namespaces ───────────────────────────────────┐
+│ NAMESPACE                                      │
+│ ▶ default                                      │ ← Current
+│   kube-system                                  │
+│   kube-public                                  │
+│   my-app                                       │
+└────────────────────────────────────────────────┘
 
-Type to filter, ↑/↓ to select, Enter to confirm
+Navigate with ↑/↓, press Enter to switch
 ```
 
 **Quick Tips:**
 - The header shows your current context and namespace: `Context: minikube | Namespace: default`
+- Current namespace is marked with ▶ and highlighted in yellow
 - Namespace switching applies to the current context only
 - When switching contexts, you'll automatically be placed in that context's default namespace
+- Press `?` or `h` anytime to see the help screen
 
 ## Input Modes
 
 ### Normal Mode
 - Default mode for navigation and viewing
 - All keyboard shortcuts are active
-
-### Namespace Selection Mode
-- Activated by pressing `n`
-- Type to filter namespaces
-- `Enter` to confirm, `Esc` to cancel
-- `↑`/`↓` to navigate suggestions
+- Navigate between views, select items, perform actions
 
 ### Scale Mode (Deployments only)
 - Activated by pressing `s` in Deployments view
-- Enter number of replicas
+- Enter number of replicas for the selected deployment
 - `Enter` to confirm, `Esc` to cancel
+- Only numeric input is accepted
 
 ## Status Messages
 
@@ -135,6 +152,38 @@ The bottom of the screen shows:
 - `kubectl` must be installed and configured
 - Valid kubeconfig file at `~/.kube/config` or path specified in `$KUBECONFIG`
 - Network access to Kubernetes clusters
+
+## Advanced Features
+
+### Exec into Pod (Terminal Access)
+
+Press `e` in the Pods view to open an interactive shell inside the selected pod.
+
+**How it works:**
+1. Navigate to the Pods view (press `1`)
+2. Select a pod using `↑`/`↓` arrows
+3. Press `e` to exec into the pod
+4. An interactive shell will open (tries `/bin/sh`, falls back to `/bin/bash`)
+5. Type `exit` or press `Ctrl+D` to return to the TUI
+
+**Example use cases:**
+- Debug application issues
+- Inspect file systems
+- Run diagnostic commands
+- Check environment variables
+- Test network connectivity
+
+**Note:** The pod must have `/bin/sh` or `/bin/bash` available.
+
+### Built-in Help System
+
+Press `?` or `h` at any time to open the comprehensive help screen that shows:
+- All navigation commands
+- View-specific operations
+- Keyboard shortcuts
+- Tips and tricks
+
+The help screen is context-aware and always available, making it easy to discover features.
 
 ## Troubleshooting
 

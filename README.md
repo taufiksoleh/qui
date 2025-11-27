@@ -10,11 +10,13 @@ A powerful terminal user interface (TUI) for managing Kubernetes clusters, writt
 
 - **Multi-Cluster Support**: View and switch between Kubernetes contexts/clusters
 - **Cluster Overview**: Display all available contexts with connection indicator
-- **Pod Management**: View, monitor, and delete pods with real-time status updates
+- **Namespace Browser**: Dedicated view to list and switch between namespaces
+- **Pod Management**: View, monitor, delete pods, and exec into containers
+- **Interactive Shell**: Execute commands directly inside pods with `e` key
 - **Deployment Management**: List deployments, scale replicas, and delete deployments
 - **Service Viewing**: Browse Kubernetes services with detailed information
 - **Log Viewer**: View pod logs directly in the terminal (last 100 lines)
-- **Namespace Switching**: Quickly switch between namespaces
+- **Built-in Help**: Comprehensive help screen accessible with `?` or `h`
 - **Interactive Navigation**: Vim-style keybindings (j/k) and arrow key support
 - **Resource Operations**: Delete pods and deployments, scale deployments
 - **Fast & Lightweight**: Built with Rust for maximum performance
@@ -116,9 +118,19 @@ For detailed usage instructions, see [USAGE.md](USAGE.md).
 4. Current cluster is marked with ▶ and highlighted in green
 
 #### Switching Between Namespaces
-1. Press `n` to open namespace selector
-2. Type to filter or use `↑`/`↓` to select
+1. Press `5` or `n` to view all namespaces
+2. Use `↑`/`↓` to select a namespace
 3. Press `Enter` to switch
+4. Current namespace is marked with ▶ and highlighted in yellow
+
+#### Accessing Pod Shell
+1. Press `1` to view pods
+2. Select a pod with `↑`/`↓`
+3. Press `e` to exec into the pod
+4. Type `exit` to return to the TUI
+
+#### Getting Help
+- Press `?` or `h` anytime to see the full help screen
 
 ### Keyboard Shortcuts
 
@@ -128,30 +140,38 @@ For detailed usage instructions, see [USAGE.md](USAGE.md).
 - `2` - Switch to Deployments view
 - `3` - Switch to Services view
 - `4` - Switch to Clusters/Contexts view
-- `n` - Change namespace (opens input prompt)
+- `5`/`n` - Switch to Namespaces view
+- `?`/`h` - Show help screen
 - `r` - Refresh current view
 - `↑` or `k` - Move selection up
 - `↓` or `j` - Move selection down
-
-#### Clusters View
-- `Enter` - Switch to selected context/cluster
+- `Esc` - Back/Close (returns to previous view or closes dialogs)
 
 #### Pods View
 - `l` - View logs for selected pod
+- `e` - Exec into pod (open interactive shell)
 - `d` - Delete selected pod
 
 #### Deployments View
 - `s` - Scale deployment (opens replica count prompt)
 - `d` - Delete selected deployment
 
+#### Clusters View
+- `Enter` - Switch to selected context/cluster
+
+#### Namespaces View
+- `Enter` - Switch to selected namespace
+
+#### Help View
+- `Esc` - Close help and return to previous view
+
 #### Logs View
 - `Esc` - Return to previous view
 
-#### Input Prompts
+#### Input Prompts (Scale)
 - `Enter` - Confirm input
 - `Esc` - Cancel input
 - `Backspace` - Delete character
-- `↑/↓` - Navigate suggestions (namespace selector)
 
 ## Features Overview
 
@@ -163,6 +183,13 @@ Displays all available Kubernetes contexts from your kubeconfig with:
 - Default namespace
 - Visual highlighting of the active context in green
 - Press `Enter` to switch contexts seamlessly
+
+### Namespaces View
+Shows all namespaces in the current cluster with:
+- Full list of available namespaces
+- Current namespace marked with ▶ and highlighted in yellow
+- Simple Enter-to-switch interaction
+- No typing required - just navigate and select
 
 ### Pods View
 Displays all pods in the current namespace with:

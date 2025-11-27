@@ -209,21 +209,31 @@ jobs:
 
           echo "Testing permission detection..."
 
-          # Test 1: Default directory
-          INSTALL_DIR="/usr/local/bin"
-          if [ "$INSTALL_DIR" = "/usr/local/bin" ] && [ "$(id -u)" -ne 0 ]; then
-            echo "✓ Correctly detects sudo needed for /usr/local/bin"
+          # Test 1: Writable directory (user home)
+          INSTALL_DIR="$HOME/.local/bin"
+          mkdir -p "$INSTALL_DIR"
+          if [ -w "$INSTALL_DIR" ]; then
+            echo "✓ User directory is writable: $INSTALL_DIR"
           else
-            echo "✓ Running as root or different directory"
+            echo "✗ User directory should be writable"
+            exit 1
           fi
 
-          # Test 2: User directory
-          INSTALL_DIR="$HOME/.local/bin"
-          if [ "$INSTALL_DIR" = "/usr/local/bin" ] && [ "$(id -u)" -ne 0 ]; then
-            echo "✗ Should not require sudo for user directory"
-            exit 1
+          # Test 2: Check if /usr/local/bin requires privileges
+          INSTALL_DIR="/usr/local/bin"
+          if [ ! -w "$INSTALL_DIR" ] && [ ! -w "$(dirname "$INSTALL_DIR")" ]; then
+            echo "✓ Correctly detects /usr/local/bin is not writable without privileges"
           else
-            echo "✓ No sudo required for $INSTALL_DIR"
+            echo "✓ /usr/local/bin is writable (running as root or directory is writable)"
+          fi
+
+          # Test 3: Default directory is now user home
+          INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+          if [[ "$INSTALL_DIR" == *"$HOME"* ]]; then
+            echo "✓ Default directory uses user home: $INSTALL_DIR"
+          else
+            echo "✗ Default directory should be in user home"
+            exit 1
           fi
 
           echo "✓ Permission detection tests passed"

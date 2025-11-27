@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 # Configuration
 REPO="taufiksoleh/qui"
 BINARY_NAME="kube-tui"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
 # Function to print colored messages
 print_info() {
@@ -68,12 +68,16 @@ detect_arch() {
     esac
 }
 
-# Check if running as root for system-wide installation
+# Check if install directory is writable
 check_permissions() {
-    if [ "$INSTALL_DIR" = "/usr/local/bin" ] && [ "$(id -u)" -ne 0 ]; then
-        print_warning "Installation to $INSTALL_DIR requires root privileges"
-        print_info "Re-running with sudo..."
-        exec sudo bash "$0" "$@"
+    if [ ! -w "$INSTALL_DIR" ] && [ ! -w "$(dirname "$INSTALL_DIR")" ]; then
+        print_error "Installation directory $INSTALL_DIR is not writable"
+        echo ""
+        print_info "Options:"
+        echo "  1. Run with sudo: sudo $0"
+        echo "  2. Install to user directory: INSTALL_DIR=~/.local/bin $0"
+        echo ""
+        exit 1
     fi
 }
 
@@ -151,7 +155,27 @@ verify_installation() {
         print_info "Run '$BINARY_NAME' to start the Kubernetes Terminal UI"
     else
         print_warning "Installation complete, but $BINARY_NAME is not in your PATH"
-        print_info "Add $INSTALL_DIR to your PATH or run: $INSTALL_DIR/$BINARY_NAME"
+        print_info "Add $INSTALL_DIR to your PATH:"
+        echo ""
+        if [ "$OS" = "macos" ]; then
+            echo "  # For zsh (default on macOS):"
+            echo "  echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.zshrc"
+            echo "  source ~/.zshrc"
+            echo ""
+            echo "  # For bash:"
+            echo "  echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.bash_profile"
+            echo "  source ~/.bash_profile"
+        else
+            echo "  # For bash:"
+            echo "  echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.bashrc"
+            echo "  source ~/.bashrc"
+            echo ""
+            echo "  # For zsh:"
+            echo "  echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.zshrc"
+            echo "  source ~/.zshrc"
+        fi
+        echo ""
+        print_info "Or run directly: $INSTALL_DIR/$BINARY_NAME"
     fi
 }
 

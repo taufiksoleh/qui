@@ -2,7 +2,7 @@ use anyhow::Result;
 use crossterm::event::KeyCode;
 
 use crate::events::InputEvent;
-use crate::kube_client::{DeploymentInfo, KubeClient, PodInfo, ServiceInfo};
+use crate::kube_client::{ContextInfo, DeploymentInfo, KubeClient, PodInfo, ServiceInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum View {
@@ -10,6 +10,7 @@ pub enum View {
     Deployments,
     Services,
     Logs,
+    Clusters,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,6 +26,9 @@ pub struct App {
     pub namespaces: Vec<String>,
     pub current_namespace: String,
     pub namespace_index: usize,
+    pub contexts: Vec<ContextInfo>,
+    pub context_index: usize,
+    pub current_context: String,
     pub pods: Vec<PodInfo>,
     pub pod_index: usize,
     pub deployments: Vec<DeploymentInfo>,
@@ -47,12 +51,18 @@ impl App {
             .cloned()
             .unwrap_or_else(|| "default".to_string());
 
+        let contexts = KubeClient::list_contexts().unwrap_or_default();
+        let current_context = KubeClient::get_current_context().unwrap_or_default();
+
         let mut app = Self {
             client,
             current_view: View::Pods,
             namespaces,
             current_namespace: current_namespace.clone(),
             namespace_index: 0,
+            contexts,
+            context_index: 0,
+            current_context,
             pods: vec![],
             pod_index: 0,
             deployments: vec![],
@@ -91,6 +101,10 @@ impl App {
             }
             KeyCode::Char('3') => {
                 self.current_view = View::Services;
+                self.refresh_current_view().await?;
+            }
+            KeyCode::Char('4') => {
+                self.current_view = View::Clusters;
                 self.refresh_current_view().await?;
             }
             KeyCode::Char('n') => {
@@ -222,6 +236,11 @@ impl App {
                     self.service_index -= 1;
                 }
             }
+            View::Clusters => {
+                if self.context_index > 0 {
+                    self.context_index -= 1;
+                }
+            }
             View::Logs => {}
         }
     }
@@ -241,6 +260,11 @@ impl App {
             View::Services => {
                 if self.service_index < self.services.len().saturating_sub(1) {
                     self.service_index += 1;
+                }
+            }
+            View::Clusters => {
+                if self.context_index < self.contexts.len().saturating_sub(1) {
+                    self.context_index += 1;
                 }
             }
             View::Logs => {}
@@ -283,6 +307,17 @@ impl App {
                 }
                 Err(e) => {
                     self.error_message = Some(format!("Failed to list services: {}", e));
+                }
+            },
+            View::Clusters => match KubeClient::list_contexts() {
+                Ok(contexts) => {
+                    self.contexts = contexts;
+                    if self.context_index >= self.contexts.len() {
+                        self.context_index = self.contexts.len().saturating_sub(1);
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to list contexts: {}", e));
                 }
             },
             View::Logs => {}
@@ -357,6 +392,7 @@ impl App {
             ("1", "Pods"),
             ("2", "Deployments"),
             ("3", "Services"),
+            ("4", "Clusters"),
             ("n", "Change Namespace"),
             ("r", "Refresh"),
             ("↑/k", "Up"),

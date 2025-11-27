@@ -5,6 +5,50 @@ use kube::{
     api::{Api, DeleteParams, ListParams, LogParams},
     Client,
 };
+use serde::Deserialize;
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Deserialize)]
+struct KubeConfig {
+    #[serde(rename = "current-context")]
+    current_context: String,
+    contexts: Vec<ContextEntry>,
+    clusters: Vec<ClusterEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ContextEntry {
+    name: String,
+    context: ContextDetail,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ContextDetail {
+    cluster: String,
+    #[serde(default)]
+    namespace: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ClusterEntry {
+    name: String,
+    cluster: ClusterDetail,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ClusterDetail {
+    server: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextInfo {
+    pub name: String,
+    pub cluster: String,
+    pub server: String,
+    pub namespace: String,
+    pub is_current: bool,
+}
 
 #[derive(Clone)]
 pub struct KubeClient {
@@ -15,6 +59,56 @@ impl KubeClient {
     pub async fn new() -> Result<Self> {
         let client = Client::try_default().await?;
         Ok(Self { client })
+    }
+
+    fn get_kubeconfig_path() -> PathBuf {
+        if let Ok(path) = std::env::var("KUBECONFIG") {
+            PathBuf::from(path)
+        } else {
+            let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+            home.push(".kube");
+            home.push("config");
+            home
+        }
+    }
+
+    pub fn list_contexts() -> Result<Vec<ContextInfo>> {
+        let config_path = Self::get_kubeconfig_path();
+        let config_content = fs::read_to_string(&config_path)?;
+        let kubeconfig: KubeConfig = serde_yaml::from_str(&config_content)?;
+
+        let current_context = kubeconfig.current_context.clone();
+
+        let mut contexts = Vec::new();
+        for ctx in kubeconfig.contexts {
+            let server = kubeconfig
+                .clusters
+                .iter()
+                .find(|c| c.name == ctx.context.cluster)
+                .map(|c| c.cluster.server.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+
+            contexts.push(ContextInfo {
+                name: ctx.name.clone(),
+                cluster: ctx.context.cluster,
+                server,
+                namespace: if ctx.context.namespace.is_empty() {
+                    "default".to_string()
+                } else {
+                    ctx.context.namespace
+                },
+                is_current: ctx.name == current_context,
+            });
+        }
+
+        Ok(contexts)
+    }
+
+    pub fn get_current_context() -> Result<String> {
+        let config_path = Self::get_kubeconfig_path();
+        let config_content = fs::read_to_string(&config_path)?;
+        let kubeconfig: KubeConfig = serde_yaml::from_str(&config_content)?;
+        Ok(kubeconfig.current_context)
     }
 
     pub async fn list_namespaces(&self) -> Result<Vec<String>> {

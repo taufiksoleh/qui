@@ -24,19 +24,28 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 }
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
-    let title = vec![
+    let mut title = vec![
         Span::styled(
             "Kubernetes TUI",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" | "),
-        Span::styled(
-            format!("Namespace: {}", app.current_namespace),
-            Style::default().fg(Color::Yellow),
-        ),
     ];
+
+    if !app.current_context.is_empty() {
+        title.push(Span::raw(" | "));
+        title.push(Span::styled(
+            format!("Context: {}", app.current_context),
+            Style::default().fg(Color::Green),
+        ));
+    }
+
+    title.push(Span::raw(" | "));
+    title.push(Span::styled(
+        format!("Namespace: {}", app.current_namespace),
+        Style::default().fg(Color::Yellow),
+    ));
 
     let header = Paragraph::new(Line::from(title)).block(Block::default().borders(Borders::ALL));
 
@@ -49,6 +58,7 @@ fn render_main_content(f: &mut Frame, app: &App, area: Rect) {
         View::Deployments => render_deployments_view(f, app, area),
         View::Services => render_services_view(f, app, area),
         View::Logs => render_logs_view(f, app, area),
+        View::Clusters => render_clusters_view(f, app, area),
     }
 }
 
@@ -219,6 +229,65 @@ fn render_logs_view(f: &mut Frame, app: &App, area: Rect) {
         .wrap(Wrap { trim: false });
 
     f.render_widget(logs, area);
+}
+
+fn render_clusters_view(f: &mut Frame, app: &App, area: Rect) {
+    let header_cells = ["CONTEXT", "CLUSTER", "SERVER", "NAMESPACE"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow)));
+
+    let header = Row::new(header_cells)
+        .style(Style::default())
+        .height(1)
+        .bottom_margin(1);
+
+    let rows = app.contexts.iter().enumerate().map(|(i, ctx)| {
+        let mut cells = vec![
+            Cell::from(ctx.name.clone()),
+            Cell::from(ctx.cluster.clone()),
+            Cell::from(ctx.server.clone()),
+            Cell::from(ctx.namespace.clone()),
+        ];
+
+        // Add a visual indicator for the current context
+        if ctx.is_current {
+            cells[0] = Cell::from(format!("▶ {}", ctx.name));
+        }
+
+        let style = if i == app.context_index {
+            Style::default()
+                .bg(Color::DarkGray)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+        } else if ctx.is_current {
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        Row::new(cells).style(style).height(1)
+    });
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(35),
+            Constraint::Percentage(15),
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Clusters / Contexts")
+            .style(Style::default()),
+    );
+
+    f.render_widget(table, area);
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {

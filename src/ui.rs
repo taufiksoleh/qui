@@ -24,14 +24,12 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 }
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
-    let mut title = vec![
-        Span::styled(
-            "Kubernetes TUI",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ];
+    let mut title = vec![Span::styled(
+        "Kubernetes TUI",
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )];
 
     if !app.current_context.is_empty() {
         title.push(Span::raw(" | "));

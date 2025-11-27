@@ -1,0 +1,78 @@
+name: Validate Workflows
+
+on:
+  push:
+    paths:
+      - '.github/workflows/*.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/*.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Workflow Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate YAML syntax
+        run: |
+          echo "Validating workflow YAML files..."
+
+          # Install yamllint if not available
+          if ! command -v yamllint &> /dev/null; then
+            pip install yamllint
+          fi
+
+          # Validate all workflow files
+          for file in .github/workflows/*.yml; do
+            echo "Checking $file..."
+            yamllint -d relaxed "$file" || true
+
+            # Basic YAML syntax check with Python
+            python3 -c "import yaml; yaml.safe_load(open('$file'))" && \
+              echo "✓ $file is valid YAML" || \
+              (echo "✗ $file has invalid YAML syntax" && exit 1)
+          done
+
+      - name: Check for required workflow fields
+        run: |
+          echo "Checking workflow structure..."
+
+          for file in .github/workflows/*.yml; do
+            echo "Analyzing $file..."
+
+            # Check for 'name' field
+            if grep -q "^name:" "$file"; then
+              echo "  ✓ Has name field"
+            else
+              echo "  ✗ Missing name field"
+              exit 1
+            fi
+
+            # Check for 'on' trigger
+            if grep -q "^on:" "$file"; then
+              echo "  ✓ Has on trigger"
+            else
+              echo "  ✗ Missing on trigger"
+              exit 1
+            fi
+
+            # Check for jobs
+            if grep -q "^jobs:" "$file"; then
+              echo "  ✓ Has jobs defined"
+            else
+              echo "  ✗ Missing jobs"
+              exit 1
+            fi
+          done
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "✓ All workflow files validated successfully"
+          echo ""
+          echo "Workflow files:"
+          ls -1 .github/workflows/*.yml | sed 's/^/  - /'

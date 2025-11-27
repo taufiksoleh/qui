@@ -147,13 +147,11 @@ impl App {
                     self.input_buffer.clear();
                 }
             }
-            KeyCode::Enter => {
-                match self.current_view {
-                    View::Clusters => self.switch_to_selected_context().await?,
-                    View::Namespaces => self.switch_to_selected_namespace().await?,
-                    _ => {}
-                }
-            }
+            KeyCode::Enter => match self.current_view {
+                View::Clusters => self.switch_to_selected_context().await?,
+                View::Namespaces => self.switch_to_selected_namespace().await?,
+                _ => {}
+            },
             KeyCode::Esc => {
                 if self.current_view == View::Help {
                     self.current_view = View::Pods;
@@ -468,7 +466,8 @@ impl App {
                                     };
                                 }
                                 Err(e) => {
-                                    self.error_message = Some(format!("Failed to list namespaces: {}", e));
+                                    self.error_message =
+                                        Some(format!("Failed to list namespaces: {}", e));
                                 }
                             }
 
@@ -476,7 +475,8 @@ impl App {
                             self.refresh_current_view().await?;
                         }
                         Err(e) => {
-                            self.error_message = Some(format!("Failed to initialize new client: {}", e));
+                            self.error_message =
+                                Some(format!("Failed to initialize new client: {}", e));
                         }
                     }
                 }

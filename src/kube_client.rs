@@ -1,4 +1,8 @@
 use anyhow::Result;
+use crossterm::execute;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::core::v1::{Namespace, Pod, Service};
 use kube::{
@@ -7,11 +11,9 @@ use kube::{
 };
 use serde::Deserialize;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
 use std::process::Command;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, LeaveAlternateScreen, EnterAlternateScreen};
-use crossterm::execute;
-use std::io;
 
 #[derive(Debug, Clone, Deserialize)]
 struct KubeConfig {

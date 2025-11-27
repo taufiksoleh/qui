@@ -350,14 +350,12 @@ fn render_namespaces_view(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
     let help_text = vec![
-        Line::from(vec![
-            Span::styled(
-                "Kube-TUI Quick Reference",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
+        Line::from(vec![Span::styled(
+            "Kube-TUI Quick Reference",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(""),
         Line::from(vec![Span::styled(
             "Navigation:",

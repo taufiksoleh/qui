@@ -8,6 +8,8 @@ A powerful terminal user interface (TUI) for managing Kubernetes clusters, writt
 
 ## Features
 
+- **Multi-Cluster Support**: View and switch between Kubernetes contexts/clusters
+- **Cluster Overview**: Display all available contexts with connection indicator
 - **Pod Management**: View, monitor, and delete pods with real-time status updates
 - **Deployment Management**: List deployments, scale replicas, and delete deployments
 - **Service Viewing**: Browse Kubernetes services with detailed information
@@ -103,6 +105,21 @@ Launch the application:
 cargo run --release
 ```
 
+For detailed usage instructions, see [USAGE.md](USAGE.md).
+
+### Quick Start
+
+#### Switching Between Clusters/Contexts
+1. Press `4` to view all available clusters
+2. Use `↑`/`↓` to select a cluster
+3. Press `Enter` to switch to that cluster
+4. Current cluster is marked with ▶ and highlighted in green
+
+#### Switching Between Namespaces
+1. Press `n` to open namespace selector
+2. Type to filter or use `↑`/`↓` to select
+3. Press `Enter` to switch
+
 ### Keyboard Shortcuts
 
 #### Global Navigation
@@ -110,10 +127,14 @@ cargo run --release
 - `1` - Switch to Pods view
 - `2` - Switch to Deployments view
 - `3` - Switch to Services view
+- `4` - Switch to Clusters/Contexts view
 - `n` - Change namespace (opens input prompt)
 - `r` - Refresh current view
 - `↑` or `k` - Move selection up
 - `↓` or `j` - Move selection down
+
+#### Clusters View
+- `Enter` - Switch to selected context/cluster
 
 #### Pods View
 - `l` - View logs for selected pod
@@ -133,6 +154,15 @@ cargo run --release
 - `↑/↓` - Navigate suggestions (namespace selector)
 
 ## Features Overview
+
+### Clusters View
+Displays all available Kubernetes contexts from your kubeconfig with:
+- Context name (with ▶ indicator for current context)
+- Cluster name
+- API server URL
+- Default namespace
+- Visual highlighting of the active context in green
+- Press `Enter` to switch contexts seamlessly
 
 ### Pods View
 Displays all pods in the current namespace with:
@@ -165,15 +195,14 @@ Lists services with:
 
 ## Configuration
 
-Kube-TUI uses your default Kubernetes configuration:
-- Config file: `~/.kube/config`
-- Context: Uses the current context
+Kube-TUI uses your Kubernetes configuration:
+- Config file: `~/.kube/config` or path from `$KUBECONFIG` environment variable
+- Context: Uses the current context (can be switched from within the app using `4`)
 - Authentication: Inherits from kubectl configuration
 
-To use a different context:
-```bash
-kubectl config use-context <context-name>
-```
+You can switch contexts either:
+1. **From within the app**: Press `4`, select a context, press `Enter`
+2. **From command line**: `kubectl config use-context <context-name>` (then restart the app)
 
 ## Architecture
 
@@ -229,5 +258,5 @@ Potential features for future releases:
 - Exec into containers
 - YAML editing and apply
 - Resource describe view
-- Multi-cluster support
 - Custom themes
+- CRD (Custom Resource Definition) support

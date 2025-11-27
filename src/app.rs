@@ -128,6 +128,11 @@ impl App {
                     self.input_buffer.clear();
                 }
             }
+            KeyCode::Enter => {
+                if self.current_view == View::Clusters {
+                    self.switch_to_selected_context().await?;
+                }
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 self.move_selection_up();
             }
@@ -386,6 +391,49 @@ impl App {
         Ok(())
     }
 
+    async fn switch_to_selected_context(&mut self) -> Result<()> {
+        if let Some(context) = self.contexts.get(self.context_index) {
+            match KubeClient::switch_context(&context.name) {
+                Ok(_) => {
+                    self.status_message = format!("Switched to context: {}", context.name);
+                    self.current_context = context.name.clone();
+
+                    // Reinitialize client with new context
+                    match KubeClient::new().await {
+                        Ok(new_client) => {
+                            self.client = new_client;
+
+                            // Refresh namespaces and set to the context's default namespace
+                            match self.client.list_namespaces().await {
+                                Ok(namespaces) => {
+                                    self.namespaces = namespaces;
+                                    self.current_namespace = if !context.namespace.is_empty() {
+                                        context.namespace.clone()
+                                    } else {
+                                        "default".to_string()
+                                    };
+                                }
+                                Err(e) => {
+                                    self.error_message = Some(format!("Failed to list namespaces: {}", e));
+                                }
+                            }
+
+                            // Refresh context list to update current indicator
+                            self.refresh_current_view().await?;
+                        }
+                        Err(e) => {
+                            self.error_message = Some(format!("Failed to initialize new client: {}", e));
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to switch context: {}", e));
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_help_text(&self) -> Vec<(&str, &str)> {
         let mut help = vec![
             ("q", "Quit"),
@@ -407,6 +455,9 @@ impl App {
             View::Deployments => {
                 help.push(("s", "Scale"));
                 help.push(("d", "Delete"));
+            }
+            View::Clusters => {
+                help.push(("Enter", "Switch Context"));
             }
             View::Logs => {
                 help.push(("Esc", "Back"));

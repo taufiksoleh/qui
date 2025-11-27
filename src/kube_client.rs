@@ -8,6 +8,7 @@ use kube::{
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 #[derive(Debug, Clone, Deserialize)]
 struct KubeConfig {
@@ -109,6 +110,21 @@ impl KubeClient {
         let config_content = fs::read_to_string(&config_path)?;
         let kubeconfig: KubeConfig = serde_yaml::from_str(&config_content)?;
         Ok(kubeconfig.current_context)
+    }
+
+    pub fn switch_context(context_name: &str) -> Result<()> {
+        let output = Command::new("kubectl")
+            .arg("config")
+            .arg("use-context")
+            .arg(context_name)
+            .output()?;
+
+        if !output.status.success() {
+            let error_msg = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Failed to switch context: {}", error_msg);
+        }
+
+        Ok(())
     }
 
     pub async fn list_namespaces(&self) -> Result<Vec<String>> {

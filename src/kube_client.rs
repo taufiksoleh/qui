@@ -9,6 +9,9 @@ use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, LeaveAlternateScreen, EnterAlternateScreen};
+use crossterm::execute;
+use std::io;
 
 #[derive(Debug, Clone, Deserialize)]
 struct KubeConfig {
@@ -130,6 +133,12 @@ impl KubeClient {
     pub fn exec_into_pod(namespace: &str, pod_name: &str) -> Result<()> {
         use std::process::Stdio;
 
+        // Suspend the TUI before exec
+        disable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, LeaveAlternateScreen)?;
+
+        // Try /bin/sh first
         let status = Command::new("kubectl")
             .arg("exec")
             .arg("-it")
@@ -141,26 +150,38 @@ impl KubeClient {
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .status()?;
+            .status();
 
-        if !status.success() {
-            // Try bash if sh fails
-            let status = Command::new("kubectl")
-                .arg("exec")
-                .arg("-it")
-                .arg("-n")
-                .arg(namespace)
-                .arg(pod_name)
-                .arg("--")
-                .arg("/bin/bash")
-                .stdin(Stdio::inherit())
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .status()?;
+        let success = match status {
+            Ok(s) if s.success() => true,
+            _ => {
+                // Try bash if sh fails
+                let bash_status = Command::new("kubectl")
+                    .arg("exec")
+                    .arg("-it")
+                    .arg("-n")
+                    .arg(namespace)
+                    .arg(pod_name)
+                    .arg("--")
+                    .arg("/bin/bash")
+                    .stdin(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .status();
 
-            if !status.success() {
-                anyhow::bail!("Failed to exec into pod. Pod may not have /bin/sh or /bin/bash");
+                match bash_status {
+                    Ok(s) => s.success(),
+                    Err(_) => false,
+                }
             }
+        };
+
+        // Restore the TUI after exec
+        execute!(io::stdout(), EnterAlternateScreen)?;
+        enable_raw_mode()?;
+
+        if !success {
+            anyhow::bail!("Failed to exec into pod. Pod may not have /bin/sh or /bin/bash");
         }
 
         Ok(())

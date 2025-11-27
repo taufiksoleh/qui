@@ -37,6 +37,7 @@ pub struct App {
     pub services: Vec<ServiceInfo>,
     pub service_index: usize,
     pub logs: String,
+    pub logs_scroll: usize,
     pub error_message: Option<String>,
     pub input_mode: InputMode,
     pub input_buffer: String,
@@ -71,6 +72,7 @@ impl App {
             services: vec![],
             service_index: 0,
             logs: String::new(),
+            logs_scroll: 0,
             error_message: None,
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
@@ -225,7 +227,12 @@ impl App {
                     self.namespace_index -= 1;
                 }
             }
-            View::Logs | View::Help => {}
+            View::Logs => {
+                if self.logs_scroll > 0 {
+                    self.logs_scroll -= 1;
+                }
+            }
+            View::Help => {}
         }
     }
 
@@ -256,7 +263,13 @@ impl App {
                     self.namespace_index += 1;
                 }
             }
-            View::Logs | View::Help => {}
+            View::Logs => {
+                let log_lines = self.logs.lines().count();
+                if self.logs_scroll < log_lines.saturating_sub(1) {
+                    self.logs_scroll += 1;
+                }
+            }
+            View::Help => {}
         }
     }
 
@@ -371,6 +384,7 @@ impl App {
             {
                 Ok(logs) => {
                     self.logs = logs;
+                    self.logs_scroll = 0; // Reset scroll position
                     self.current_view = View::Logs;
                 }
                 Err(e) => {
@@ -479,6 +493,7 @@ impl App {
                 help.push(("Enter", "Switch"));
             }
             View::Logs => {
+                help.push(("↑/↓", "Scroll"));
                 help.push(("Esc", "Back"));
             }
             View::Help => {

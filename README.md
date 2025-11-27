@@ -166,6 +166,8 @@ For detailed usage instructions, see [USAGE.md](USAGE.md).
 - `Esc` - Close help and return to previous view
 
 #### Logs View
+- `↑`/`k` - Scroll up
+- `↓`/`j` - Scroll down
 - `Esc` - Return to previous view
 
 #### Input Prompts (Scale)
@@ -217,7 +219,8 @@ Lists services with:
 
 ### Logs View
 - Displays the last 100 lines of logs from a selected pod
-- Scrollable view for reviewing application output
+- Full scrolling support with arrow keys or vim-style j/k navigation
+- Shows current line position in title bar
 - Quick access with `l` key from pods view
 
 ## Configuration

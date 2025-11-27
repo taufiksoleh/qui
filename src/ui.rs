@@ -219,14 +219,22 @@ fn render_services_view(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_logs_view(f: &mut Frame, app: &App, area: Rect) {
+    let total_lines = app.logs.lines().count();
+    let title = format!(
+        "Pod Logs (Last 100 lines) - Line {}/{} - Use ↑/↓ to scroll",
+        app.logs_scroll + 1,
+        total_lines.max(1)
+    );
+
     let logs = Paragraph::new(app.logs.clone())
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Pod Logs (Last 100 lines)")
+                .title(title)
                 .style(Style::default()),
         )
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((app.logs_scroll as u16, 0));
 
     f.render_widget(logs, area);
 }
@@ -391,14 +399,24 @@ fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
         Line::from("  Current items marked with ▶ and highlighted"),
         Line::from(""),
         Line::from(vec![Span::styled(
+            "Logs View:",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  ↑/k - Scroll Up        │  Scroll logs up one line"),
+        Line::from("  ↓/j - Scroll Down      │  Scroll logs down one line"),
+        Line::from("  Esc - Back             │  Return to pods view"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
             "General:",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from("  r - Refresh            │  Reload current view data"),
-        Line::from("  ↑/k - Move Up          │  Navigate selection up"),
-        Line::from("  ↓/j - Move Down        │  Navigate selection down"),
+        Line::from("  ↑/k - Move Up          │  Navigate selection up (or scroll in logs)"),
+        Line::from("  ↓/j - Move Down        │  Navigate selection down (or scroll in logs)"),
         Line::from("  Esc - Back/Close       │  Return to previous view"),
         Line::from("  q - Quit               │  Exit application"),
         Line::from(""),

@@ -79,7 +79,11 @@ Shows a comprehensive quick reference guide with all available commands organize
 
 | Key | Action | Description |
 |-----|--------|-------------|
+| `↑` or `k` | Scroll Up | Scroll logs up one line |
+| `↓` or `j` | Scroll Down | Scroll logs down one line |
 | `Esc` | Back | Return to previous view |
+
+The Logs view displays pod logs with full scrolling support. Navigate through long log files using arrow keys or vim-style j/k keys. The title bar shows your current position (e.g., "Line 45/200").
 
 ## How to Switch Between Contexts (Clusters)
 

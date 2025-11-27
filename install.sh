@@ -99,17 +99,71 @@ get_latest_version() {
 
     # Try to get latest release from GitHub API
     if command -v curl >/dev/null 2>&1; then
-        LATEST_VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        API_RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/latest")
+        LATEST_VERSION=$(echo "$API_RESPONSE" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
+        # Check if we got a "Not Found" response (no releases exist)
+        if echo "$API_RESPONSE" | grep -q '"message".*"Not Found"'; then
+            print_error "No releases found for this repository"
+            echo ""
+            print_info "This project doesn't have any published releases yet."
+            print_info "To install kube-tui, you can build from source:"
+            echo ""
+            echo "  # Clone the repository"
+            echo "  git clone https://github.com/$REPO.git"
+            echo "  cd qui"
+            echo ""
+            echo "  # Build with Cargo (requires Rust)"
+            echo "  cargo build --release"
+            echo ""
+            echo "  # The binary will be at: target/release/$BINARY_NAME"
+            echo "  # You can copy it to your PATH:"
+            echo "  cp target/release/$BINARY_NAME $INSTALL_DIR/"
+            echo ""
+            print_info "Alternatively, ask the maintainers to create a release:"
+            echo "  https://github.com/$REPO/releases/new"
+            echo ""
+            exit 1
+        fi
     elif command -v wget >/dev/null 2>&1; then
-        LATEST_VERSION=$(wget -qO- "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        API_RESPONSE=$(wget -qO- "https://api.github.com/repos/$REPO/releases/latest")
+        LATEST_VERSION=$(echo "$API_RESPONSE" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
+        # Check if we got a "Not Found" response (no releases exist)
+        if echo "$API_RESPONSE" | grep -q '"message".*"Not Found"'; then
+            print_error "No releases found for this repository"
+            echo ""
+            print_info "This project doesn't have any published releases yet."
+            print_info "To install kube-tui, you can build from source:"
+            echo ""
+            echo "  # Clone the repository"
+            echo "  git clone https://github.com/$REPO.git"
+            echo "  cd qui"
+            echo ""
+            echo "  # Build with Cargo (requires Rust)"
+            echo "  cargo build --release"
+            echo ""
+            echo "  # The binary will be at: target/release/$BINARY_NAME"
+            echo "  # You can copy it to your PATH:"
+            echo "  cp target/release/$BINARY_NAME $INSTALL_DIR/"
+            echo ""
+            print_info "Alternatively, ask the maintainers to create a release:"
+            echo "  https://github.com/$REPO/releases/new"
+            echo ""
+            exit 1
+        fi
     else
         print_error "Neither curl nor wget found. Please install one of them."
         exit 1
     fi
 
     if [ -z "$LATEST_VERSION" ]; then
-        print_warning "Could not fetch latest version from API, using 'latest'"
-        DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/$BINARY_NAME-$OS-$ARCH.tar.gz"
+        print_error "Could not determine the latest version"
+        echo ""
+        print_info "Please try building from source or check:"
+        echo "  https://github.com/$REPO/releases"
+        echo ""
+        exit 1
     else
         print_success "Latest version: $LATEST_VERSION"
         DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_VERSION/$BINARY_NAME-$OS-$ARCH.tar.gz"

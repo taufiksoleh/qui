@@ -70,7 +70,19 @@ detect_arch() {
 
 # Check if install directory is writable
 check_permissions() {
-    if [ ! -w "$INSTALL_DIR" ] && [ ! -w "$(dirname "$INSTALL_DIR")" ]; then
+    # Try to create the install directory if it doesn't exist
+    if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+        print_error "Cannot create installation directory $INSTALL_DIR"
+        echo ""
+        print_info "Options:"
+        echo "  1. Run with sudo: sudo $0"
+        echo "  2. Install to user directory: INSTALL_DIR=~/.local/bin $0"
+        echo ""
+        exit 1
+    fi
+
+    # Check if the directory is writable
+    if [ ! -w "$INSTALL_DIR" ]; then
         print_error "Installation directory $INSTALL_DIR is not writable"
         echo ""
         print_info "Options:"
@@ -135,10 +147,7 @@ install_binary() {
     # Extract
     tar -xzf "$TEMP_FILE" -C "$TEMP_DIR"
 
-    # Create install directory if it doesn't exist
-    mkdir -p "$INSTALL_DIR"
-
-    # Install binary
+    # Install binary (directory already created by check_permissions)
     mv "$TEMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
     chmod +x "$INSTALL_DIR/$BINARY_NAME"
 

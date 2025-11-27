@@ -52,19 +52,59 @@ pub struct App {
 
 impl App {
     pub async fn new() -> Result<Self> {
-        let client = KubeClient::new().await?;
-        let namespaces = client.list_namespaces().await?;
+        // Try to get contexts first (this works even without a connection)
+        let contexts = KubeClient::list_contexts().unwrap_or_default();
+        let current_context = KubeClient::get_current_context().unwrap_or_default();
+
+        // Check if we have any contexts configured
+        if contexts.is_empty() {
+            anyhow::bail!("No Kubernetes contexts found. Please configure kubectl first.");
+        }
+
+        // Check if current context is set
+        if current_context.is_empty() {
+            anyhow::bail!("No current context set. Please run 'kubectl config use-context <context-name>' or use kubectx.");
+        }
+
+        // Try to create client and connect
+        let (client, namespaces, initial_view, error_message) = match KubeClient::new().await {
+            Ok(client) => {
+                // Try to list namespaces to verify connection
+                match client.list_namespaces().await {
+                    Ok(namespaces) => {
+                        if namespaces.is_empty() {
+                            (client, vec!["default".to_string()], View::Pods, None)
+                        } else {
+                            (client, namespaces, View::Pods, None)
+                        }
+                    }
+                    Err(e) => {
+                        // Connection failed, start on Clusters view
+                        let error_msg = format!(
+                            "Failed to connect to cluster '{}': {}. Please switch to a valid context (Press 4 for Clusters view).",
+                            current_context, e
+                        );
+                        (client, vec!["default".to_string()], View::Clusters, Some(error_msg))
+                    }
+                }
+            }
+            Err(e) => {
+                // Client creation failed, this is usually a config issue
+                anyhow::bail!(
+                    "Failed to initialize Kubernetes client: {}. Please check your kubeconfig and ensure a valid context is selected.",
+                    e
+                );
+            }
+        };
+
         let current_namespace = namespaces
             .first()
             .cloned()
             .unwrap_or_else(|| "default".to_string());
 
-        let contexts = KubeClient::list_contexts().unwrap_or_default();
-        let current_context = KubeClient::get_current_context().unwrap_or_default();
-
         let mut app = Self {
             client,
-            current_view: View::Pods,
+            current_view: initial_view,
             namespaces,
             current_namespace: current_namespace.clone(),
             namespace_index: 0,
@@ -81,7 +121,7 @@ impl App {
             logs_scroll: 0,
             logs_follow: false,
             logs_pod_name: None,
-            error_message: None,
+            error_message,
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
             status_message: String::new(),
@@ -89,7 +129,11 @@ impl App {
             terminal_pod_name: None,
         };
 
-        app.refresh_current_view().await?;
+        // Only try to refresh if we don't have an error
+        if app.error_message.is_none() {
+            let _ = app.refresh_current_view().await;
+        }
+
         Ok(app)
     }
 
@@ -179,6 +223,12 @@ impl App {
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.move_selection_down();
+            }
+            KeyCode::Left => {
+                self.navigate_tab_left().await?;
+            }
+            KeyCode::Right => {
+                self.navigate_tab_right().await?;
             }
             _ => {}
         }
@@ -459,9 +509,12 @@ impl App {
 
     async fn switch_to_selected_context(&mut self) -> Result<()> {
         if let Some(context) = self.contexts.get(self.context_index) {
+            // Clear any previous errors
+            self.error_message = None;
+            self.status_message = format!("Switching to context: {}...", context.name);
+
             match KubeClient::switch_context(&context.name) {
                 Ok(_) => {
-                    self.status_message = format!("Switched to context: {}", context.name);
                     self.current_context = context.name.clone();
 
                     // Reinitialize client with new context
@@ -469,19 +522,37 @@ impl App {
                         Ok(new_client) => {
                             self.client = new_client;
 
-                            // Refresh namespaces and set to the context's default namespace
+                            // Try to verify connection by listing namespaces
                             match self.client.list_namespaces().await {
                                 Ok(namespaces) => {
                                     self.namespaces = namespaces;
                                     self.current_namespace = if !context.namespace.is_empty() {
                                         context.namespace.clone()
                                     } else {
-                                        "default".to_string()
+                                        self.namespaces
+                                            .first()
+                                            .cloned()
+                                            .unwrap_or_else(|| "default".to_string())
                                     };
+
+                                    // Success! Clear any errors and show success message
+                                    self.error_message = None;
+                                    self.status_message = format!(
+                                        "Successfully connected to context: {} (namespace: {})",
+                                        context.name, self.current_namespace
+                                    );
+
+                                    // Switch to Pods view and refresh
+                                    self.current_view = View::Pods;
+                                    self.refresh_current_view().await?;
                                 }
                                 Err(e) => {
-                                    self.error_message =
-                                        Some(format!("Failed to list namespaces: {}", e));
+                                    self.error_message = Some(format!(
+                                        "Switched to '{}' but failed to connect: {}. The cluster may be down or unreachable.",
+                                        context.name, e
+                                    ));
+                                    self.namespaces = vec!["default".to_string()];
+                                    self.current_namespace = "default".to_string();
                                 }
                             }
 
@@ -489,8 +560,10 @@ impl App {
                             self.refresh_current_view().await?;
                         }
                         Err(e) => {
-                            self.error_message =
-                                Some(format!("Failed to initialize new client: {}", e));
+                            self.error_message = Some(format!(
+                                "Switched to '{}' but failed to initialize client: {}. Check your kubeconfig.",
+                                context.name, e
+                            ));
                         }
                     }
                 }
@@ -593,15 +666,57 @@ impl App {
         // The actual work is done in get_terminal_screen()
     }
 
+    async fn navigate_tab_left(&mut self) -> Result<()> {
+        let tabs = [
+            View::Pods,
+            View::Deployments,
+            View::Services,
+            View::Clusters,
+            View::Namespaces,
+            View::Help,
+        ];
+
+        if let Some(current_index) = tabs.iter().position(|&v| v == self.current_view) {
+            let new_index = if current_index == 0 {
+                tabs.len() - 1
+            } else {
+                current_index - 1
+            };
+            self.current_view = tabs[new_index];
+            self.refresh_current_view().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn navigate_tab_right(&mut self) -> Result<()> {
+        let tabs = [
+            View::Pods,
+            View::Deployments,
+            View::Services,
+            View::Clusters,
+            View::Namespaces,
+            View::Help,
+        ];
+
+        if let Some(current_index) = tabs.iter().position(|&v| v == self.current_view) {
+            let new_index = if current_index == tabs.len() - 1 {
+                0
+            } else {
+                current_index + 1
+            };
+            self.current_view = tabs[new_index];
+            self.refresh_current_view().await?;
+        }
+
+        Ok(())
+    }
+
     pub fn get_help_text(&self) -> Vec<(&str, &str)> {
         let mut help = vec![
             ("q", "Quit"),
-            ("1", "Pods"),
-            ("2", "Deployments"),
-            ("3", "Services"),
-            ("4", "Clusters"),
-            ("5/n", "Namespaces"),
-            ("?/h", "Help"),
+            ("←/→", "Switch Tab"),
+            ("1-5", "Jump to Tab"),
             ("r", "Refresh"),
             ("↑/k", "Up"),
             ("↓/j", "Down"),

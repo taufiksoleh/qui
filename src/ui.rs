@@ -13,14 +13,16 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
+            Constraint::Length(3),
             Constraint::Min(0),
             Constraint::Length(3),
         ])
         .split(f.area());
 
     render_header(f, app, chunks[0]);
-    render_main_content(f, app, chunks[1]);
-    render_footer(f, app, chunks[2]);
+    render_tabs(f, app, chunks[1]);
+    render_main_content(f, app, chunks[2]);
+    render_footer(f, app, chunks[3]);
 }
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
@@ -32,14 +34,14 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     )];
 
     if !app.current_context.is_empty() {
-        title.push(Span::raw(" | "));
+        title.push(Span::raw(" │ "));
         title.push(Span::styled(
             format!("Context: {}", app.current_context),
             Style::default().fg(Color::Green),
         ));
     }
 
-    title.push(Span::raw(" | "));
+    title.push(Span::raw(" │ "));
     title.push(Span::styled(
         format!("Namespace: {}", app.current_namespace),
         Style::default().fg(Color::Yellow),
@@ -48,6 +50,54 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let header = Paragraph::new(Line::from(title)).block(Block::default().borders(Borders::ALL));
 
     f.render_widget(header, area);
+}
+
+fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
+    let tabs = vec![
+        ("1", "Pods", View::Pods),
+        ("2", "Deployments", View::Deployments),
+        ("3", "Services", View::Services),
+        ("4", "Clusters", View::Clusters),
+        ("5", "Namespaces", View::Namespaces),
+        ("?", "Help", View::Help),
+    ];
+
+    let mut tab_spans = Vec::new();
+
+    for (i, (key, label, view)) in tabs.iter().enumerate() {
+        if i > 0 {
+            tab_spans.push(Span::raw(" "));
+        }
+
+        let is_active = *view == app.current_view;
+
+        let style = if is_active {
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::DIM)
+        };
+
+        let tab_text = format!(" {} {} ", key, label);
+        tab_spans.push(Span::styled(tab_text, style));
+    }
+
+    tab_spans.push(Span::raw("  "));
+    tab_spans.push(Span::styled(
+        "← → Navigate",
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::ITALIC),
+    ));
+
+    let tabs_paragraph = Paragraph::new(Line::from(tab_spans))
+        .block(Block::default().borders(Borders::ALL));
+
+    f.render_widget(tabs_paragraph, area);
 }
 
 fn render_main_content(f: &mut Frame, app: &App, area: Rect) {
@@ -364,6 +414,7 @@ fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )]),
+        Line::from("  ←/→ - Switch Tab       │  Navigate between tabs with arrow keys"),
         Line::from("  1 - Pods View          │  List all pods in current namespace"),
         Line::from("  2 - Deployments View   │  List all deployments"),
         Line::from("  3 - Services View      │  List all services"),
@@ -398,6 +449,7 @@ fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
         )]),
         Line::from("  Enter - Switch         │  Switch to selected cluster/namespace"),
         Line::from("  Current items marked with ▶ and highlighted"),
+        Line::from("  Note: If connection fails on startup, press 4 to switch context"),
         Line::from(""),
         Line::from(vec![Span::styled(
             "Logs View:",
@@ -428,9 +480,11 @@ fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         )]),
+        Line::from("  • Use ←/→ arrows or number keys (1-5) to switch between tabs"),
         Line::from("  • Header shows current context and namespace"),
-        Line::from("  • Footer shows available commands for current view"),
+        Line::from("  • Active tab is highlighted in the tab bar"),
         Line::from("  • Status messages appear in green (success) or red (error)"),
+        Line::from("  • If cluster is unreachable, switch context (4) and press Enter"),
         Line::from(""),
         Line::from(vec![Span::styled(
             "Press Esc to close this help",

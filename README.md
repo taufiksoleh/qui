@@ -1,5 +1,9 @@
 # Kube-TUI - Kubernetes Terminal UI
 
+[![CI](https://github.com/taufiksoleh/qui/workflows/CI/badge.svg)](https://github.com/taufiksoleh/qui/actions/workflows/ci.yml)
+[![Test Installation](https://github.com/taufiksoleh/qui/workflows/Test%20Installation%20Script/badge.svg)](https://github.com/taufiksoleh/qui/actions/workflows/test-install.yml)
+[![Release](https://github.com/taufiksoleh/qui/workflows/Release%20Build/badge.svg)](https://github.com/taufiksoleh/qui/actions/workflows/release.yml)
+
 A powerful terminal user interface (TUI) for managing Kubernetes clusters, written in Rust. Kube-TUI provides an intuitive, interactive way to manage your Kubernetes resources without the complexity of kubectl commands.
 
 ## Features

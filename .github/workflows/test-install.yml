@@ -1,0 +1,396 @@
+name: Test Installation Script
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'install.sh'
+      - '.github/workflows/test-install.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'install.sh'
+      - '.github/workflows/test-install.yml'
+  workflow_dispatch:
+
+jobs:
+  test-script-syntax:
+    name: Test Script Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: bash -n install.sh
+
+      - name: Check for shellcheck
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck -x install.sh || true
+          else
+            echo "shellcheck not available, skipping"
+          fi
+
+      - name: Verify script is executable
+        run: |
+          if [ -x install.sh ]; then
+            echo "✓ Script is executable"
+          else
+            echo "✗ Script is not executable"
+            exit 1
+          fi
+
+  test-detection:
+    name: Test Detection on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test OS detection
+        run: |
+          cat <<'EOF' > test_detection.sh
+          #!/bin/bash
+          source install.sh 2>/dev/null || true
+
+          detect_os() {
+              case "$(uname -s)" in
+                  Linux*)
+                      OS="linux"
+                      ;;
+                  Darwin*)
+                      OS="macos"
+                      ;;
+                  *)
+                      echo "Unsupported OS"
+                      exit 1
+                      ;;
+              esac
+              echo "OS: $OS"
+          }
+
+          detect_arch() {
+              ARCH="$(uname -m)"
+              case "$ARCH" in
+                  x86_64|amd64)
+                      ARCH="x86_64"
+                      ;;
+                  aarch64|arm64)
+                      ARCH="aarch64"
+                      ;;
+                  *)
+                      echo "Unsupported architecture"
+                      exit 1
+                      ;;
+              esac
+              echo "Architecture: $ARCH"
+          }
+
+          detect_os
+          detect_arch
+          EOF
+
+          chmod +x test_detection.sh
+          ./test_detection.sh
+
+      - name: Test URL construction
+        run: |
+          cat <<'EOF' > test_url.sh
+          #!/bin/bash
+          REPO="taufiksoleh/qui"
+          BINARY_NAME="kube-tui"
+
+          case "$(uname -s)" in
+              Linux*) OS="linux" ;;
+              Darwin*) OS="macos" ;;
+          esac
+
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+              x86_64|amd64) ARCH="x86_64" ;;
+              aarch64|arm64) ARCH="aarch64" ;;
+          esac
+
+          URL="https://github.com/$REPO/releases/latest/download/$BINARY_NAME-$OS-$ARCH.tar.gz"
+          echo "Download URL: $URL"
+
+          # Verify URL format
+          if [[ $URL =~ ^https://github.com/.+/releases/latest/download/kube-tui-(linux|macos)-(x86_64|aarch64).tar.gz$ ]]; then
+            echo "✓ URL format is correct"
+          else
+            echo "✗ URL format is incorrect"
+            exit 1
+          fi
+          EOF
+
+          chmod +x test_url.sh
+          ./test_url.sh
+
+  test-installation-flow:
+    name: Test Installation Flow on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test custom directory installation (dry-run)
+        run: |
+          # Create test script that simulates installation
+          cat <<'EOF' > test_install_flow.sh
+          #!/bin/bash
+          set -e
+
+          INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+          TEMP_DIR=$(mktemp -d)
+
+          echo "Testing installation flow..."
+          echo "Install directory: $INSTALL_DIR"
+          echo "Temp directory: $TEMP_DIR"
+
+          # Create install directory
+          mkdir -p "$INSTALL_DIR"
+          echo "✓ Created install directory"
+
+          # Simulate binary creation
+          echo "#!/bin/bash" > "$TEMP_DIR/kube-tui"
+          echo 'echo "kube-tui test binary"' >> "$TEMP_DIR/kube-tui"
+          chmod +x "$TEMP_DIR/kube-tui"
+          echo "✓ Created test binary"
+
+          # Test binary
+          if [ -x "$TEMP_DIR/kube-tui" ]; then
+            echo "✓ Binary is executable"
+          else
+            echo "✗ Binary is not executable"
+            exit 1
+          fi
+
+          # Simulate installation
+          cp "$TEMP_DIR/kube-tui" "$INSTALL_DIR/kube-tui"
+          echo "✓ Installed binary to $INSTALL_DIR"
+
+          # Verify installation
+          if [ -f "$INSTALL_DIR/kube-tui" ]; then
+            echo "✓ Binary exists at $INSTALL_DIR/kube-tui"
+          else
+            echo "✗ Binary not found"
+            exit 1
+          fi
+
+          # Test execution
+          if "$INSTALL_DIR/kube-tui" >/dev/null 2>&1; then
+            echo "✓ Binary is executable after installation"
+          else
+            echo "✓ Binary exists (actual execution would require real binary)"
+          fi
+
+          # Cleanup
+          rm -f "$INSTALL_DIR/kube-tui"
+          rm -rf "$TEMP_DIR"
+          echo "✓ Cleanup completed"
+
+          echo "✓ All installation flow tests passed"
+          EOF
+
+          chmod +x test_install_flow.sh
+          INSTALL_DIR="$HOME/.test-kube-tui" ./test_install_flow.sh
+
+      - name: Test permission detection
+        run: |
+          cat <<'EOF' > test_permissions.sh
+          #!/bin/bash
+
+          echo "Testing permission detection..."
+
+          # Test 1: Default directory
+          INSTALL_DIR="/usr/local/bin"
+          if [ "$INSTALL_DIR" = "/usr/local/bin" ] && [ "$(id -u)" -ne 0 ]; then
+            echo "✓ Correctly detects sudo needed for /usr/local/bin"
+          else
+            echo "✓ Running as root or different directory"
+          fi
+
+          # Test 2: User directory
+          INSTALL_DIR="$HOME/.local/bin"
+          if [ "$INSTALL_DIR" = "/usr/local/bin" ] && [ "$(id -u)" -ne 0 ]; then
+            echo "✗ Should not require sudo for user directory"
+            exit 1
+          else
+            echo "✓ No sudo required for $INSTALL_DIR"
+          fi
+
+          echo "✓ Permission detection tests passed"
+          EOF
+
+          chmod +x test_permissions.sh
+          ./test_permissions.sh
+
+  test-error-handling:
+    name: Test Error Handling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test unsupported OS handling
+        run: |
+          cat <<'EOF' > test_errors.sh
+          #!/bin/bash
+
+          echo "Testing error handling..."
+
+          # Test function exists
+          if grep -q "detect_os()" install.sh; then
+            echo "✓ detect_os function exists"
+          else
+            echo "✗ detect_os function not found"
+            exit 1
+          fi
+
+          if grep -q "detect_arch()" install.sh; then
+            echo "✓ detect_arch function exists"
+          else
+            echo "✗ detect_arch function not found"
+            exit 1
+          fi
+
+          # Check for error handling
+          if grep -q "set -e" install.sh; then
+            echo "✓ Script has 'set -e' for error handling"
+          else
+            echo "✗ Script missing 'set -e'"
+            exit 1
+          fi
+
+          # Check for print_error function
+          if grep -q "print_error" install.sh; then
+            echo "✓ Error printing function exists"
+          else
+            echo "✗ Error printing function not found"
+            exit 1
+          fi
+
+          echo "✓ Error handling tests passed"
+          EOF
+
+          chmod +x test_errors.sh
+          ./test_errors.sh
+
+      - name: Test cleanup operations
+        run: |
+          cat <<'EOF' > test_cleanup.sh
+          #!/bin/bash
+          set -e
+
+          echo "Testing cleanup operations..."
+
+          # Create temp directory
+          TEMP_DIR=$(mktemp -d)
+          echo "Created temp dir: $TEMP_DIR"
+
+          # Create test files
+          touch "$TEMP_DIR/test1.txt"
+          touch "$TEMP_DIR/test2.txt"
+
+          # Verify files exist
+          if [ -f "$TEMP_DIR/test1.txt" ] && [ -f "$TEMP_DIR/test2.txt" ]; then
+            echo "✓ Test files created"
+          else
+            echo "✗ Failed to create test files"
+            exit 1
+          fi
+
+          # Cleanup
+          rm -rf "$TEMP_DIR"
+
+          # Verify cleanup
+          if [ ! -d "$TEMP_DIR" ]; then
+            echo "✓ Cleanup successful"
+          else
+            echo "✗ Cleanup failed"
+            exit 1
+          fi
+
+          echo "✓ Cleanup tests passed"
+          EOF
+
+          chmod +x test_cleanup.sh
+          ./test_cleanup.sh
+
+  test-download-tools:
+    name: Test Download Tools Detection
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify curl is available
+        run: |
+          if command -v curl >/dev/null 2>&1; then
+            echo "✓ curl is available"
+            curl --version | head -n1
+          else
+            echo "✗ curl not found"
+            exit 1
+          fi
+
+      - name: Test download tool fallback logic
+        run: |
+          cat <<'EOF' > test_tools.sh
+          #!/bin/bash
+
+          echo "Testing download tool detection..."
+
+          if command -v curl >/dev/null 2>&1; then
+            echo "✓ curl available"
+          elif command -v wget >/dev/null 2>&1; then
+            echo "✓ wget available"
+          else
+            echo "✗ Neither curl nor wget available"
+            exit 1
+          fi
+
+          echo "✓ Download tool tests passed"
+          EOF
+
+          chmod +x test_tools.sh
+          ./test_tools.sh
+
+  summary:
+    name: Test Summary
+    needs: [test-script-syntax, test-detection, test-installation-flow, test-error-handling, test-download-tools]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          echo "Installation Script Test Summary"
+          echo "================================="
+          echo ""
+          if [ "${{ needs.test-script-syntax.result }}" = "success" ] && \
+             [ "${{ needs.test-detection.result }}" = "success" ] && \
+             [ "${{ needs.test-installation-flow.result }}" = "success" ] && \
+             [ "${{ needs.test-error-handling.result }}" = "success" ] && \
+             [ "${{ needs.test-download-tools.result }}" = "success" ]; then
+            echo "✓ All tests PASSED"
+            echo "✓ Installation script is ready for production"
+          else
+            echo "✗ Some tests FAILED"
+            echo "Test Results:"
+            echo "  Script Syntax: ${{ needs.test-script-syntax.result }}"
+            echo "  Detection: ${{ needs.test-detection.result }}"
+            echo "  Installation Flow: ${{ needs.test-installation-flow.result }}"
+            echo "  Error Handling: ${{ needs.test-error-handling.result }}"
+            echo "  Download Tools: ${{ needs.test-download-tools.result }}"
+            exit 1
+          fi

@@ -59,6 +59,7 @@ fn render_main_content(f: &mut Frame, app: &App, area: Rect) {
         View::Clusters => render_clusters_view(f, app, area),
         View::Namespaces => render_namespaces_view(f, app, area),
         View::Help => render_help_view(f, app, area),
+        View::Terminal => render_terminal_view(f, app, area),
     }
 }
 
@@ -449,6 +450,35 @@ fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
         .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, area);
+}
+
+fn render_terminal_view(f: &mut Frame, app: &App, area: Rect) {
+    let title = if let Some(pod_name) = &app.terminal_pod_name {
+        format!("Terminal - Pod: {} (Press Esc or Ctrl+D to exit)", pod_name)
+    } else {
+        "Terminal (Press Esc or Ctrl+D to exit)".to_string()
+    };
+
+    let content = if let Some(lines) = app.get_terminal_screen() {
+        if lines.is_empty() {
+            "Connecting to pod shell...\nWaiting for response...".to_string()
+        } else {
+            lines.join("\n")
+        }
+    } else {
+        "Connecting to pod...".to_string()
+    };
+
+    let terminal = Paragraph::new(content)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .style(Style::default().fg(Color::Green)),
+        )
+        .wrap(Wrap { trim: false });
+
+    f.render_widget(terminal, area);
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {

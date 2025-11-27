@@ -1,19 +1,20 @@
 use anyhow::Result;
-use crossterm::execute;
-use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-};
+use crossterm::event::{KeyCode, KeyModifiers};
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::core::v1::{Namespace, Pod, Service};
 use kube::{
     api::{Api, DeleteParams, ListParams, LogParams},
     Client,
 };
+use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use serde::Deserialize;
 use std::fs;
-use std::io;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+use vt100::Parser;
 
 #[derive(Debug, Clone, Deserialize)]
 struct KubeConfig {
@@ -131,64 +132,139 @@ impl KubeClient {
 
         Ok(())
     }
+}
 
-    pub fn exec_into_pod(namespace: &str, pod_name: &str) -> Result<()> {
-        use std::process::Stdio;
+pub struct TerminalSession {
+    parser: Parser,
+    writer: Box<dyn Write + Send>,
+    #[allow(dead_code)]
+    child: Box<dyn portable_pty::Child + Send + Sync>,
+    rx: Receiver<Vec<u8>>,
+    _reader_thread: Option<thread::JoinHandle<()>>,
+}
 
-        // Suspend the TUI before exec
-        disable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, LeaveAlternateScreen)?;
+impl TerminalSession {
+    pub fn new(namespace: &str, pod_name: &str) -> Result<Self> {
+        let pty_system = NativePtySystem::default();
 
-        // Try /bin/sh first
-        let status = Command::new("kubectl")
-            .arg("exec")
-            .arg("-it")
-            .arg("-n")
-            .arg(namespace)
-            .arg(pod_name)
-            .arg("--")
-            .arg("/bin/sh")
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status();
+        let pair = pty_system.openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })?;
 
-        let success = match status {
-            Ok(s) if s.success() => true,
-            _ => {
-                // Try bash if sh fails
-                let bash_status = Command::new("kubectl")
-                    .arg("exec")
-                    .arg("-it")
-                    .arg("-n")
-                    .arg(namespace)
-                    .arg(pod_name)
-                    .arg("--")
-                    .arg("/bin/bash")
-                    .stdin(Stdio::inherit())
-                    .stdout(Stdio::inherit())
-                    .stderr(Stdio::inherit())
-                    .status();
+        let mut cmd = CommandBuilder::new("kubectl");
+        cmd.arg("exec");
+        cmd.arg("-it");
+        cmd.arg("-n");
+        cmd.arg(namespace);
+        cmd.arg(pod_name);
+        cmd.arg("--");
+        cmd.arg("/bin/sh");
 
-                match bash_status {
-                    Ok(s) => s.success(),
-                    Err(_) => false,
+        let child = pair.slave.spawn_command(cmd)?;
+
+        let mut reader = pair.master.try_clone_reader()?;
+        let writer = pair.master.take_writer()?;
+
+        // Create a channel for reading PTY output in a background thread
+        let (tx, rx): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
+
+        // Spawn a thread to read from the PTY
+        let reader_thread = thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break, // EOF
+                    Ok(n) => {
+                        if tx.send(buf[..n].to_vec()).is_err() {
+                            break; // Receiver dropped
+                        }
+                    }
+                    Err(_) => break,
                 }
             }
-        };
+        });
 
-        // Restore the TUI after exec
-        execute!(io::stdout(), EnterAlternateScreen)?;
-        enable_raw_mode()?;
+        Ok(Self {
+            parser: Parser::new(24, 80, 1000),
+            writer,
+            child,
+            rx,
+            _reader_thread: Some(reader_thread),
+        })
+    }
 
-        if !success {
-            anyhow::bail!("Failed to exec into pod. Pod may not have /bin/sh or /bin/bash");
+    pub fn send_input(&mut self, event: &crate::events::InputEvent) -> Result<()> {
+        let mut buf = Vec::new();
+
+        match event.key_code() {
+            KeyCode::Char(c) => {
+                if event.modifiers().contains(KeyModifiers::CONTROL) {
+                    // Handle Ctrl+C, Ctrl+D, etc.
+                    let ctrl_char = match c {
+                        'c' => Some(3u8),  // Ctrl+C
+                        'd' => Some(4u8),  // Ctrl+D
+                        'z' => Some(26u8), // Ctrl+Z
+                        'l' => Some(12u8), // Ctrl+L
+                        _ => None,
+                    };
+                    if let Some(ctrl_byte) = ctrl_char {
+                        buf.push(ctrl_byte);
+                    }
+                } else {
+                    buf.extend_from_slice(c.to_string().as_bytes());
+                }
+            }
+            KeyCode::Enter => buf.extend_from_slice(b"\r"),
+            KeyCode::Backspace => buf.push(127),
+            KeyCode::Tab => buf.push(b'\t'),
+            KeyCode::Up => buf.extend_from_slice(b"\x1b[A"),
+            KeyCode::Down => buf.extend_from_slice(b"\x1b[B"),
+            KeyCode::Right => buf.extend_from_slice(b"\x1b[C"),
+            KeyCode::Left => buf.extend_from_slice(b"\x1b[D"),
+            _ => {}
         }
+
+        if !buf.is_empty() {
+            self.writer.write_all(&buf)?;
+            self.writer.flush()?;
+        }
+
+        // Process any pending output from the channel
+        self.process_output();
 
         Ok(())
     }
 
+    fn process_output(&mut self) {
+        // Process all available data from the channel without blocking
+        while let Ok(data) = self.rx.try_recv() {
+            self.parser.process(&data);
+        }
+    }
+
+    pub fn get_screen(&mut self) -> Vec<String> {
+        // Process any pending output
+        self.process_output();
+
+        let screen = self.parser.screen();
+
+        // Get the entire screen contents as a string and split by lines
+        let contents = screen.contents();
+        contents.lines().map(|s| s.to_string()).collect()
+    }
+
+    pub fn close(&mut self) -> Result<()> {
+        // Send Ctrl+D to close the shell gracefully
+        self.writer.write_all(&[4])?;
+        self.writer.flush()?;
+        Ok(())
+    }
+}
+
+impl KubeClient {
     pub async fn list_namespaces(&self) -> Result<Vec<String>> {
         let api: Api<Namespace> = Api::all(self.client.clone());
         let namespaces = api.list(&ListParams::default()).await?;

@@ -63,6 +63,11 @@ async fn run_app<B: ratatui::backend::Backend>(
             last_log_refresh = Instant::now();
         }
 
+        // Refresh terminal if in terminal view
+        if matches!(app.current_view, app::View::Terminal) {
+            app.refresh_terminal();
+        }
+
         if let Some(event) = event_handler.next()? {
             if !app.handle_event(event).await? {
                 return Ok(());

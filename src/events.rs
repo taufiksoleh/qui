@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use std::time::Duration;
 
 pub struct EventHandler;
@@ -28,6 +28,12 @@ impl InputEvent {
     pub fn key_code(&self) -> KeyCode {
         match self {
             InputEvent::Key(key) => key.code,
+        }
+    }
+
+    pub fn modifiers(&self) -> KeyModifiers {
+        match self {
+            InputEvent::Key(key) => key.modifiers,
         }
     }
 }

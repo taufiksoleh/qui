@@ -1,8 +1,9 @@
 use anyhow::Result;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
+use std::sync::{Arc, Mutex};
 
 use crate::events::InputEvent;
-use crate::kube_client::{ContextInfo, DeploymentInfo, KubeClient, PodInfo, ServiceInfo};
+use crate::kube_client::{ContextInfo, DeploymentInfo, KubeClient, PodInfo, ServiceInfo, TerminalSession};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum View {
@@ -13,6 +14,7 @@ pub enum View {
     Clusters,
     Namespaces,
     Help,
+    Terminal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,6 +46,8 @@ pub struct App {
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub status_message: String,
+    pub terminal_session: Option<Arc<Mutex<TerminalSession>>>,
+    pub terminal_pod_name: Option<String>,
 }
 
 impl App {
@@ -81,6 +85,8 @@ impl App {
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
             status_message: String::new(),
+            terminal_session: None,
+            terminal_pod_name: None,
         };
 
         app.refresh_current_view().await?;
@@ -88,6 +94,11 @@ impl App {
     }
 
     pub async fn handle_event(&mut self, event: InputEvent) -> Result<bool> {
+        // Handle terminal view with special input handling
+        if self.current_view == View::Terminal {
+            return self.handle_terminal_mode(event).await;
+        }
+
         match self.input_mode {
             InputMode::Normal => self.handle_normal_mode(event).await,
             InputMode::Scale => self.handle_scale_mode(event).await,
@@ -157,6 +168,9 @@ impl App {
                     self.current_view = View::Pods;
                 } else if self.current_view == View::Logs {
                     self.logs_follow = false;
+                    self.current_view = View::Pods;
+                } else if self.current_view == View::Terminal {
+                    self.close_terminal();
                     self.current_view = View::Pods;
                 }
             }
@@ -243,7 +257,7 @@ impl App {
                     self.logs_follow = false; // Disable follow when manually scrolling
                 }
             }
-            View::Help => {}
+            View::Help | View::Terminal => {}
         }
     }
 
@@ -281,7 +295,7 @@ impl App {
                     self.logs_follow = false; // Disable follow when manually scrolling
                 }
             }
-            View::Help => {}
+            View::Help | View::Terminal => {}
         }
     }
 
@@ -340,7 +354,7 @@ impl App {
                     self.namespace_index = self.namespaces.len().saturating_sub(1);
                 }
             }
-            View::Logs | View::Help => {}
+            View::Logs | View::Help | View::Terminal => {}
         }
         Ok(())
     }
@@ -500,16 +514,83 @@ impl App {
 
     async fn exec_into_pod(&mut self) -> Result<()> {
         if let Some(pod) = self.pods.get(self.pod_index) {
-            match KubeClient::exec_into_pod(&self.current_namespace, &pod.name) {
-                Ok(_) => {
-                    self.status_message = format!("Exited shell for pod: {}", pod.name);
+            self.status_message = format!("Connecting to pod: {}...", pod.name);
+
+            let namespace = self.current_namespace.clone();
+            let pod_name = pod.name.clone();
+
+            // Spawn terminal creation in a blocking task to avoid blocking the UI
+            let result = tokio::task::spawn_blocking(move || {
+                TerminalSession::new(&namespace, &pod_name)
+            }).await;
+
+            match result {
+                Ok(Ok(session)) => {
+                    self.terminal_session = Some(Arc::new(Mutex::new(session)));
+                    self.terminal_pod_name = Some(pod.name.clone());
+                    self.current_view = View::Terminal;
+                    self.status_message = format!("Connected to pod: {}", pod.name);
+                }
+                Ok(Err(e)) => {
+                    self.error_message = Some(format!("Failed to exec into pod: {}. Make sure kubectl is installed and the pod has /bin/sh", e));
                 }
                 Err(e) => {
-                    self.error_message = Some(format!("Failed to exec into pod: {}", e));
+                    self.error_message = Some(format!("Failed to spawn terminal task: {}", e));
                 }
             }
         }
         Ok(())
+    }
+
+    async fn handle_terminal_mode(&mut self, event: InputEvent) -> Result<bool> {
+        // Handle Ctrl+D to exit terminal
+        if let KeyCode::Char('d') = event.key_code() {
+            if event.modifiers().contains(KeyModifiers::CONTROL) {
+                self.close_terminal();
+                self.current_view = View::Pods;
+                return Ok(true);
+            }
+        }
+
+        // Handle Esc to exit terminal
+        if let KeyCode::Esc = event.key_code() {
+            self.close_terminal();
+            self.current_view = View::Pods;
+            return Ok(true);
+        }
+
+        // Forward all input to the terminal
+        if let Some(session) = &self.terminal_session {
+            if let Ok(mut session) = session.lock() {
+                session.send_input(&event)?;
+            }
+        }
+
+        Ok(true)
+    }
+
+    fn close_terminal(&mut self) {
+        if let Some(session) = &self.terminal_session {
+            if let Ok(mut session) = session.lock() {
+                let _ = session.close();
+            }
+        }
+        self.terminal_session = None;
+        self.terminal_pod_name = None;
+    }
+
+    pub fn get_terminal_screen(&self) -> Option<Vec<String>> {
+        if let Some(session) = &self.terminal_session {
+            if let Ok(mut session) = session.lock() {
+                return Some(session.get_screen());
+            }
+        }
+        None
+    }
+
+    pub fn refresh_terminal(&mut self) {
+        // This is called periodically to ensure terminal output is displayed
+        // The actual work is done in get_terminal_screen()
     }
 
     pub fn get_help_text(&self) -> Vec<(&str, &str)> {

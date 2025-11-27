@@ -1,7 +1,7 @@
 mod app;
-mod ui;
-mod kube_client;
 mod events;
+mod kube_client;
+mod ui;
 
 use anyhow::Result;
 use crossterm::{
@@ -9,10 +9,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
 use app::App;

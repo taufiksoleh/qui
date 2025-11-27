@@ -42,7 +42,10 @@ impl App {
     pub async fn new() -> Result<Self> {
         let client = KubeClient::new().await?;
         let namespaces = client.list_namespaces().await?;
-        let current_namespace = namespaces.first().cloned().unwrap_or_else(|| "default".to_string());
+        let current_namespace = namespaces
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "default".to_string());
 
         let mut app = Self {
             client,
@@ -178,10 +181,8 @@ impl App {
                             .await
                         {
                             Ok(_) => {
-                                self.status_message = format!(
-                                    "Scaled {} to {} replicas",
-                                    deployment.name, replicas
-                                );
+                                self.status_message =
+                                    format!("Scaled {} to {} replicas", deployment.name, replicas);
                                 self.refresh_current_view().await?;
                             }
                             Err(e) => {
@@ -249,19 +250,17 @@ impl App {
     async fn refresh_current_view(&mut self) -> Result<()> {
         self.error_message = None;
         match self.current_view {
-            View::Pods => {
-                match self.client.list_pods(&self.current_namespace).await {
-                    Ok(pods) => {
-                        self.pods = pods;
-                        if self.pod_index >= self.pods.len() {
-                            self.pod_index = self.pods.len().saturating_sub(1);
-                        }
-                    }
-                    Err(e) => {
-                        self.error_message = Some(format!("Failed to list pods: {}", e));
+            View::Pods => match self.client.list_pods(&self.current_namespace).await {
+                Ok(pods) => {
+                    self.pods = pods;
+                    if self.pod_index >= self.pods.len() {
+                        self.pod_index = self.pods.len().saturating_sub(1);
                     }
                 }
-            }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to list pods: {}", e));
+                }
+            },
             View::Deployments => {
                 match self.client.list_deployments(&self.current_namespace).await {
                     Ok(deployments) => {
@@ -275,19 +274,17 @@ impl App {
                     }
                 }
             }
-            View::Services => {
-                match self.client.list_services(&self.current_namespace).await {
-                    Ok(services) => {
-                        self.services = services;
-                        if self.service_index >= self.services.len() {
-                            self.service_index = self.services.len().saturating_sub(1);
-                        }
-                    }
-                    Err(e) => {
-                        self.error_message = Some(format!("Failed to list services: {}", e));
+            View::Services => match self.client.list_services(&self.current_namespace).await {
+                Ok(services) => {
+                    self.services = services;
+                    if self.service_index >= self.services.len() {
+                        self.service_index = self.services.len().saturating_sub(1);
                     }
                 }
-            }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to list services: {}", e));
+                }
+            },
             View::Logs => {}
         }
         Ok(())
@@ -324,7 +321,8 @@ impl App {
                             self.refresh_current_view().await?;
                         }
                         Err(e) => {
-                            self.error_message = Some(format!("Failed to delete deployment: {}", e));
+                            self.error_message =
+                                Some(format!("Failed to delete deployment: {}", e));
                         }
                     }
                 }

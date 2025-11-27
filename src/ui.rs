@@ -25,7 +25,12 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let title = vec![
-        Span::styled("Kubernetes TUI", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Kubernetes TUI",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" | "),
         Span::styled(
             format!("Namespace: {}", app.current_namespace),
@@ -33,8 +38,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         ),
     ];
 
-    let header = Paragraph::new(Line::from(title))
-        .block(Block::default().borders(Borders::ALL));
+    let header = Paragraph::new(Line::from(title)).block(Block::default().borders(Borders::ALL));
 
     f.render_widget(header, area);
 }
@@ -225,12 +229,11 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 
     // Status/Error message
     if let Some(error) = &app.error_message {
-        let error_msg = Paragraph::new(error.clone())
-            .style(Style::default().fg(Color::Red));
+        let error_msg = Paragraph::new(error.clone()).style(Style::default().fg(Color::Red));
         f.render_widget(error_msg, chunks[0]);
     } else if !app.status_message.is_empty() {
-        let status_msg = Paragraph::new(app.status_message.clone())
-            .style(Style::default().fg(Color::Green));
+        let status_msg =
+            Paragraph::new(app.status_message.clone()).style(Style::default().fg(Color::Green));
         f.render_widget(status_msg, chunks[0]);
     }
 
@@ -242,7 +245,12 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 .iter()
                 .flat_map(|(key, desc)| {
                     vec![
-                        Span::styled(*key, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            *key,
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
                         Span::raw(format!(":{} ", desc)),
                     ]
                 })

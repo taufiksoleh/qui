@@ -32,11 +32,7 @@ impl KubeClient {
         let api: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
         let pods = api.list(&ListParams::default()).await?;
 
-        Ok(pods
-            .items
-            .iter()
-            .map(|pod| PodInfo::from_pod(pod))
-            .collect())
+        Ok(pods.items.iter().map(PodInfo::from_pod).collect())
     }
 
     pub async fn delete_pod(&self, namespace: &str, name: &str) -> Result<()> {
@@ -47,8 +43,10 @@ impl KubeClient {
 
     pub async fn get_pod_logs(&self, namespace: &str, name: &str) -> Result<String> {
         let api: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
-        let mut log_params = LogParams::default();
-        log_params.tail_lines = Some(100);
+        let log_params = LogParams {
+            tail_lines: Some(100),
+            ..Default::default()
+        };
 
         let logs = api.logs(name, &log_params).await?;
         Ok(logs)
@@ -61,7 +59,7 @@ impl KubeClient {
         Ok(deployments
             .items
             .iter()
-            .map(|dep| DeploymentInfo::from_deployment(dep))
+            .map(DeploymentInfo::from_deployment)
             .collect())
     }
 
@@ -90,7 +88,7 @@ impl KubeClient {
         Ok(services
             .items
             .iter()
-            .map(|svc| ServiceInfo::from_service(svc))
+            .map(ServiceInfo::from_service)
             .collect())
     }
 }
@@ -98,7 +96,7 @@ impl KubeClient {
 #[derive(Debug, Clone)]
 pub struct PodInfo {
     pub name: String,
-    pub namespace: String,
+    pub _namespace: String,
     pub status: String,
     pub ready: String,
     pub restarts: i32,
@@ -144,7 +142,7 @@ impl PodInfo {
 
         Self {
             name,
-            namespace,
+            _namespace: namespace,
             status,
             ready,
             restarts,
@@ -156,7 +154,7 @@ impl PodInfo {
 #[derive(Debug, Clone)]
 pub struct DeploymentInfo {
     pub name: String,
-    pub namespace: String,
+    pub _namespace: String,
     pub ready: String,
     pub up_to_date: i32,
     pub available: i32,
@@ -169,11 +167,23 @@ impl DeploymentInfo {
         let namespace = dep.metadata.namespace.clone().unwrap_or_default();
 
         let desired = dep.spec.as_ref().and_then(|s| s.replicas).unwrap_or(0);
-        let ready = dep.status.as_ref().and_then(|s| s.ready_replicas).unwrap_or(0);
+        let ready = dep
+            .status
+            .as_ref()
+            .and_then(|s| s.ready_replicas)
+            .unwrap_or(0);
         let ready_str = format!("{}/{}", ready, desired);
 
-        let up_to_date = dep.status.as_ref().and_then(|s| s.updated_replicas).unwrap_or(0);
-        let available = dep.status.as_ref().and_then(|s| s.available_replicas).unwrap_or(0);
+        let up_to_date = dep
+            .status
+            .as_ref()
+            .and_then(|s| s.updated_replicas)
+            .unwrap_or(0);
+        let available = dep
+            .status
+            .as_ref()
+            .and_then(|s| s.available_replicas)
+            .unwrap_or(0);
 
         let age = dep
             .metadata
@@ -184,7 +194,7 @@ impl DeploymentInfo {
 
         Self {
             name,
-            namespace,
+            _namespace: namespace,
             ready: ready_str,
             up_to_date,
             available,
@@ -196,7 +206,7 @@ impl DeploymentInfo {
 #[derive(Debug, Clone)]
 pub struct ServiceInfo {
     pub name: String,
-    pub namespace: String,
+    pub _namespace: String,
     pub service_type: String,
     pub cluster_ip: String,
     pub ports: String,
@@ -227,7 +237,13 @@ impl ServiceInfo {
             .map(|ports| {
                 ports
                     .iter()
-                    .map(|p| format!("{}/{}", p.port, p.protocol.as_ref().unwrap_or(&"TCP".to_string())))
+                    .map(|p| {
+                        format!(
+                            "{}/{}",
+                            p.port,
+                            p.protocol.as_ref().unwrap_or(&"TCP".to_string())
+                        )
+                    })
                     .collect::<Vec<_>>()
                     .join(",")
             })
@@ -242,7 +258,7 @@ impl ServiceInfo {
 
         Self {
             name,
-            namespace,
+            _namespace: namespace,
             service_type,
             cluster_ip,
             ports,

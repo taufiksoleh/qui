@@ -21,6 +21,11 @@ pub enum InputMode {
     Scale,
 }
 
+#[derive(Debug, Clone)]
+pub enum PendingAction {
+    ExecIntoPod { namespace: String, pod_name: String },
+}
+
 pub struct App {
     pub client: KubeClient,
     pub current_view: View,
@@ -44,6 +49,7 @@ pub struct App {
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub status_message: String,
+    pub pending_action: Option<PendingAction>,
 }
 
 impl App {
@@ -81,6 +87,7 @@ impl App {
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
             status_message: String::new(),
+            pending_action: None,
         };
 
         app.refresh_current_view().await?;
@@ -138,7 +145,7 @@ impl App {
             }
             KeyCode::Char('e') => {
                 if self.current_view == View::Pods {
-                    self.exec_into_pod().await?;
+                    self.exec_into_pod();
                 }
             }
             KeyCode::Char('s') => {
@@ -498,18 +505,25 @@ impl App {
         Ok(())
     }
 
-    async fn exec_into_pod(&mut self) -> Result<()> {
+    fn exec_into_pod(&mut self) {
         if let Some(pod) = self.pods.get(self.pod_index) {
-            match KubeClient::exec_into_pod(&self.current_namespace, &pod.name) {
-                Ok(_) => {
-                    self.status_message = format!("Exited shell for pod: {}", pod.name);
-                }
-                Err(e) => {
-                    self.error_message = Some(format!("Failed to exec into pod: {}", e));
-                }
-            }
+            self.pending_action = Some(PendingAction::ExecIntoPod {
+                namespace: self.current_namespace.clone(),
+                pod_name: pod.name.clone(),
+            });
         }
-        Ok(())
+    }
+
+    pub fn take_pending_action(&mut self) -> Option<PendingAction> {
+        self.pending_action.take()
+    }
+
+    pub fn set_exec_result(&mut self, pod_name: &str, success: bool, error: Option<String>) {
+        if success {
+            self.status_message = format!("Exited shell for pod: {}", pod_name);
+        } else if let Some(e) = error {
+            self.error_message = Some(format!("Failed to exec into pod: {}", e));
+        }
     }
 
     pub fn get_help_text(&self) -> Vec<(&str, &str)> {

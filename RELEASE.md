@@ -62,31 +62,53 @@ Each release includes the following artifacts:
 
 ## Installing Released Binaries
 
-### Linux (x86_64)
+### Quick Install (Recommended)
+
+Use the installation script to automatically detect your system and install:
 
 ```bash
-curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-linux-x86_64.tar.gz | tar xz
+curl -fsSL https://raw.githubusercontent.com/taufiksoleh/qui/main/install.sh | bash
+```
+
+The script automatically:
+- Detects your OS (Linux/macOS) and architecture (x86_64/aarch64)
+- Downloads the correct binary from the latest release
+- Installs to `/usr/local/bin` (or custom directory with `INSTALL_DIR`)
+- Verifies the installation
+
+Custom installation directory:
+
+```bash
+INSTALL_DIR=$HOME/.local/bin ./install.sh
+```
+
+### Manual Installation by Platform
+
+#### Linux (x86_64)
+
+```bash
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-linux-x86_64.tar.gz | tar xz
 sudo mv kube-tui /usr/local/bin/
 ```
 
-### Linux (ARM64)
+#### Linux (ARM64)
 
 ```bash
-curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-linux-aarch64.tar.gz | tar xz
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-linux-aarch64.tar.gz | tar xz
 sudo mv kube-tui /usr/local/bin/
 ```
 
-### macOS (Intel)
+#### macOS (Intel)
 
 ```bash
-curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-macos-x86_64.tar.gz | tar xz
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-x86_64.tar.gz | tar xz
 sudo mv kube-tui /usr/local/bin/
 ```
 
-### macOS (Apple Silicon)
+#### macOS (Apple Silicon)
 
 ```bash
-curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-macos-aarch64.tar.gz | tar xz
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-aarch64.tar.gz | tar xz
 sudo mv kube-tui /usr/local/bin/
 ```
 

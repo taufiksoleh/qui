@@ -21,25 +21,53 @@ A powerful terminal user interface (TUI) for managing Kubernetes clusters, writt
 
 ## Installation
 
-### Download pre-built binaries (Recommended)
+### Quick Install (Recommended)
 
-Pre-built binaries are available for Linux and macOS on the [releases page](https://github.com/yourusername/qui/releases).
+Use the installation script to automatically detect your system and install the latest version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/taufiksoleh/qui/main/install.sh | bash
+```
+
+Or download and run the script manually:
+
+```bash
+wget https://raw.githubusercontent.com/taufiksoleh/qui/main/install.sh
+chmod +x install.sh
+./install.sh
+```
+
+The script will:
+- Detect your OS and architecture automatically
+- Download the appropriate binary
+- Install to `/usr/local/bin` (requires sudo)
+- Verify the installation
+
+To install to a custom directory:
+
+```bash
+INSTALL_DIR=$HOME/.local/bin ./install.sh
+```
+
+### Manual Installation
+
+Pre-built binaries are available for Linux and macOS on the [releases page](https://github.com/taufiksoleh/qui/releases).
 
 **Linux (x86_64):**
 ```bash
-curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-linux-x86_64.tar.gz | tar xz
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-linux-x86_64.tar.gz | tar xz
 sudo mv kube-tui /usr/local/bin/
 ```
 
 **macOS (Intel):**
 ```bash
-curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-macos-x86_64.tar.gz | tar xz
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-x86_64.tar.gz | tar xz
 sudo mv kube-tui /usr/local/bin/
 ```
 
 **macOS (Apple Silicon):**
 ```bash
-curl -L https://github.com/yourusername/qui/releases/latest/download/kube-tui-macos-aarch64.tar.gz | tar xz
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-aarch64.tar.gz | tar xz
 sudo mv kube-tui /usr/local/bin/
 ```
 

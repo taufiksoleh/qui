@@ -132,6 +132,151 @@ impl KubeClient {
 
         Ok(())
     }
+
+    /// Open a new terminal tab/window with kubectl exec to the specified pod
+    pub fn open_pod_terminal(namespace: &str, pod_name: &str) -> Result<()> {
+        let kubectl_cmd = format!("kubectl exec -it -n {} {} -- env TERM=xterm-256color /bin/bash || kubectl exec -it -n {} {} -- env TERM=xterm-256color /bin/sh",
+            namespace, pod_name, namespace, pod_name);
+
+        // Detect terminal type and open new tab
+        #[cfg(target_os = "macos")]
+        {
+            // Try iTerm2 first (more common for developers)
+            if let Ok(_) = std::env::var("ITERM_SESSION_ID") {
+                Self::open_iterm_tab(&kubectl_cmd)?;
+            } else if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
+                if term_program == "Apple_Terminal" {
+                    Self::open_terminal_app_tab(&kubectl_cmd)?;
+                } else {
+                    // Fallback: try iTerm, then Terminal.app
+                    if Self::open_iterm_tab(&kubectl_cmd).is_err() {
+                        Self::open_terminal_app_tab(&kubectl_cmd)?;
+                    }
+                }
+            } else {
+                // Default to Terminal.app
+                Self::open_terminal_app_tab(&kubectl_cmd)?;
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Detect common Linux terminals
+            if let Ok(term) = std::env::var("TERM_PROGRAM") {
+                match term.as_str() {
+                    "gnome-terminal" => Self::open_gnome_terminal_tab(&kubectl_cmd)?,
+                    "konsole" => Self::open_konsole_tab(&kubectl_cmd)?,
+                    _ => Self::open_generic_linux_terminal(&kubectl_cmd)?,
+                }
+            } else {
+                Self::open_generic_linux_terminal(&kubectl_cmd)?;
+            }
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            anyhow::bail!("Opening terminal tabs is only supported on macOS and Linux");
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    fn open_iterm_tab(command: &str) -> Result<()> {
+        let script = format!(
+            r#"tell application "iTerm"
+    tell current window
+        create tab with default profile
+        tell current session
+            write text "{}"
+        end tell
+    end tell
+end tell"#,
+            command.replace('"', "\\\"")
+        );
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output()?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Failed to open iTerm tab: {}", error);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    fn open_terminal_app_tab(command: &str) -> Result<()> {
+        let script = format!(
+            r#"tell application "Terminal"
+    activate
+    tell application "System Events" to keystroke "t" using command down
+    delay 0.5
+    do script "{}" in front window
+end tell"#,
+            command.replace('"', "\\\"")
+        );
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output()?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Failed to open Terminal tab: {}", error);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn open_gnome_terminal_tab(command: &str) -> Result<()> {
+        let output = Command::new("gnome-terminal")
+            .arg("--tab")
+            .arg("--")
+            .arg("bash")
+            .arg("-c")
+            .arg(command)
+            .spawn()?;
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn open_konsole_tab(command: &str) -> Result<()> {
+        let output = Command::new("konsole")
+            .arg("--new-tab")
+            .arg("-e")
+            .arg("bash")
+            .arg("-c")
+            .arg(command)
+            .spawn()?;
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn open_generic_linux_terminal(command: &str) -> Result<()> {
+        // Try common terminals in order
+        let terminals = vec![
+            ("gnome-terminal", vec!["--tab", "--", "bash", "-c", command]),
+            ("konsole", vec!["--new-tab", "-e", "bash", "-c", command]),
+            ("xfce4-terminal", vec!["--tab", "-e", &format!("bash -c '{}'", command)]),
+            ("xterm", vec!["-e", "bash", "-c", command]),
+        ];
+
+        for (term, args) in terminals {
+            if let Ok(_) = Command::new(term).args(&args).spawn() {
+                return Ok(());
+            }
+        }
+
+        anyhow::bail!("Could not find a suitable terminal emulator. Please install gnome-terminal, konsole, xfce4-terminal, or xterm.");
+    }
 }
 
 pub struct TerminalSession {
@@ -172,10 +317,15 @@ impl TerminalSession {
         cmd.arg("-n");
         cmd.arg(namespace);
         cmd.arg(pod_name);
-        cmd.arg("--");
 
-        // Set TERM environment variable for better compatibility
+        // Set TERM for local kubectl process
         cmd.env("TERM", "xterm-256color");
+
+        // Set environment variables inside the pod
+        cmd.arg("--");
+        cmd.arg("env");
+        cmd.arg("TERM=xterm-256color");
+        cmd.arg("PS1=$ ");  // Simple prompt to avoid issues
 
         // Try the specified shell or default to bash (better for Ruby/Rails)
         let shell_cmd = shell.unwrap_or("/bin/bash");
@@ -250,6 +400,9 @@ impl TerminalSession {
         if !buf.is_empty() {
             self.writer.write_all(&buf)?;
             self.writer.flush()?;
+
+            // Give kubectl/pod a moment to process the input
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
 
         // Process any pending output from the channel

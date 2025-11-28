@@ -21,6 +21,7 @@ pub enum View {
 pub enum InputMode {
     Normal,
     Scale,
+    TerminalChoice,
 }
 
 pub struct App {
@@ -49,6 +50,7 @@ pub struct App {
     pub terminal_session: Option<Arc<Mutex<TerminalSession>>>,
     pub terminal_pod_name: Option<String>,
     pub terminal_scroll: usize,
+    pub terminal_choice_selection: usize,
 }
 
 impl App {
@@ -129,6 +131,7 @@ impl App {
             terminal_session: None,
             terminal_pod_name: None,
             terminal_scroll: 0,
+            terminal_choice_selection: 0,
         };
 
         // Only try to refresh if we don't have an error
@@ -148,6 +151,7 @@ impl App {
         match self.input_mode {
             InputMode::Normal => self.handle_normal_mode(event).await,
             InputMode::Scale => self.handle_scale_mode(event).await,
+            InputMode::TerminalChoice => self.handle_terminal_choice_mode(event).await,
         }
     }
 
@@ -274,6 +278,111 @@ impl App {
             _ => {}
         }
         Ok(true)
+    }
+
+    async fn handle_terminal_choice_mode(&mut self, event: InputEvent) -> Result<bool> {
+        match event.key_code() {
+            KeyCode::Esc => {
+                self.input_mode = InputMode::Normal;
+                self.status_message.clear();
+            }
+            KeyCode::Char('1') => {
+                // User chose embedded terminal
+                self.input_mode = InputMode::Normal;
+                self.open_embedded_terminal().await?;
+            }
+            KeyCode::Char('2') => {
+                // User chose native terminal tab
+                self.input_mode = InputMode::Normal;
+                self.open_native_terminal().await?;
+            }
+            KeyCode::Enter => {
+                self.input_mode = InputMode::Normal;
+                if self.terminal_choice_selection == 0 {
+                    self.open_embedded_terminal().await?;
+                } else {
+                    self.open_native_terminal().await?;
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.terminal_choice_selection > 0 {
+                    self.terminal_choice_selection -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.terminal_choice_selection < 1 {
+                    self.terminal_choice_selection += 1;
+                }
+            }
+            _ => {}
+        }
+        Ok(true)
+    }
+
+    async fn open_embedded_terminal(&mut self) -> Result<()> {
+        if let Some(pod) = self.pods.get(self.pod_index) {
+            self.status_message = format!("Connecting to pod: {}...", pod.name);
+
+            let namespace = self.current_namespace.clone();
+            let pod_name = pod.name.clone();
+
+            // Spawn terminal creation in a blocking task to avoid blocking the UI
+            // Try bash first (better for Ruby/Rails), fall back to sh if it fails
+            let result = tokio::task::spawn_blocking(move || {
+                // Try bash first
+                match TerminalSession::new_with_shell(&namespace, &pod_name, Some("/bin/bash")) {
+                    Ok(session) => Ok(session),
+                    Err(_) => {
+                        // Fall back to sh
+                        TerminalSession::new_with_shell(&namespace, &pod_name, Some("/bin/sh"))
+                    }
+                }
+            }).await;
+
+            match result {
+                Ok(Ok(session)) => {
+                    self.terminal_session = Some(Arc::new(Mutex::new(session)));
+                    self.terminal_pod_name = Some(pod.name.clone());
+                    self.current_view = View::Terminal;
+                    self.status_message = format!("Connected to pod: {} | Press Esc to exit", pod.name);
+                }
+                Ok(Err(e)) => {
+                    self.error_message = Some(format!("Failed to exec into pod: {}. Make sure kubectl is installed and the pod has /bin/bash or /bin/sh", e));
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to spawn terminal task: {}", e));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn open_native_terminal(&mut self) -> Result<()> {
+        if let Some(pod) = self.pods.get(self.pod_index) {
+            let namespace = self.current_namespace.clone();
+            let pod_name = pod.name.clone();
+
+            // Open a new terminal tab
+            match KubeClient::open_pod_terminal(&namespace, &pod_name) {
+                Ok(_) => {
+                    self.status_message = format!(
+                        "Opened terminal tab for pod: {} | You can now run 'irb', 'rails c', or any interactive command",
+                        pod.name
+                    );
+                }
+                Err(e) => {
+                    self.error_message = Some(format!(
+                        "Failed to open terminal tab: {}. Falling back to manual command...", e
+                    ));
+                    // Show the manual command as a fallback
+                    self.status_message = format!(
+                        "Run this command in your terminal: kubectl exec -it -n {} {} -- /bin/bash",
+                        namespace, pod_name
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     fn move_selection_up(&mut self) {
@@ -588,39 +697,11 @@ impl App {
     }
 
     async fn exec_into_pod(&mut self) -> Result<()> {
-        if let Some(pod) = self.pods.get(self.pod_index) {
-            self.status_message = format!("Connecting to pod: {}...", pod.name);
-
-            let namespace = self.current_namespace.clone();
-            let pod_name = pod.name.clone();
-
-            // Spawn terminal creation in a blocking task to avoid blocking the UI
-            // Try bash first (better for Ruby/Rails), fall back to sh if it fails
-            let result = tokio::task::spawn_blocking(move || {
-                // Try bash first
-                match TerminalSession::new_with_shell(&namespace, &pod_name, Some("/bin/bash")) {
-                    Ok(session) => Ok(session),
-                    Err(_) => {
-                        // Fall back to sh
-                        TerminalSession::new_with_shell(&namespace, &pod_name, Some("/bin/sh"))
-                    }
-                }
-            }).await;
-
-            match result {
-                Ok(Ok(session)) => {
-                    self.terminal_session = Some(Arc::new(Mutex::new(session)));
-                    self.terminal_pod_name = Some(pod.name.clone());
-                    self.current_view = View::Terminal;
-                    self.status_message = format!("Connected to pod: {} | Tip: For Rails console run 'bin/rails c' or 'bundle exec rails c'", pod.name);
-                }
-                Ok(Err(e)) => {
-                    self.error_message = Some(format!("Failed to exec into pod: {}. Make sure kubectl is installed and the pod has /bin/bash or /bin/sh", e));
-                }
-                Err(e) => {
-                    self.error_message = Some(format!("Failed to spawn terminal task: {}", e));
-                }
-            }
+        if self.pods.get(self.pod_index).is_some() {
+            // Show terminal choice menu
+            self.input_mode = InputMode::TerminalChoice;
+            self.terminal_choice_selection = 0;
+            self.status_message = "Choose terminal type: [1] Embedded Terminal  [2] Native Terminal Tab  [Esc] Cancel".to_string();
         }
         Ok(())
     }

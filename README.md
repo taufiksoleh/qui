@@ -12,7 +12,9 @@ A powerful terminal user interface (TUI) for managing Kubernetes clusters, writt
 - **Cluster Overview**: Display all available contexts with connection indicator
 - **Namespace Browser**: Dedicated view to list and switch between namespaces
 - **Pod Management**: View, monitor, delete pods, and exec into containers
-- **Interactive Shell**: Execute commands directly inside pods with `e` key
+- **Dual Terminal Access**: Choose between embedded terminal or native terminal tab when accessing pods
+  - **Embedded Terminal**: Quick access within the TUI for basic commands
+  - **Native Terminal Tab**: Opens in your terminal emulator - perfect for irb, rails console, and interactive REPLs
 - **Deployment Management**: List deployments, scale replicas, and delete deployments
 - **Service Viewing**: Browse Kubernetes services with detailed information
 - **Log Viewer**: View pod logs directly in the terminal with real-time following (last 100 lines, auto-refresh)
@@ -126,8 +128,12 @@ For detailed usage instructions, see [USAGE.md](USAGE.md).
 #### Accessing Pod Shell
 1. Press `1` to view pods
 2. Select a pod with `↑`/`↓`
-3. Press `e` to exec into the pod
-4. Type `exit` to return to the TUI
+3. Press `e` to open the terminal choice menu
+4. Choose your preferred terminal type:
+   - **[1] Embedded Terminal**: Shell within the TUI (good for quick commands)
+   - **[2] Native Terminal Tab**: Opens new tab in your terminal app (best for irb, rails console, etc.)
+5. Use arrow keys or number keys to select, press Enter to confirm
+6. Type `exit` to close the connection when done
 
 #### Getting Help
 - Press `?` or `h` anytime to see the full help screen
@@ -149,7 +155,7 @@ For detailed usage instructions, see [USAGE.md](USAGE.md).
 
 #### Pods View
 - `l` - View logs for selected pod
-- `e` - Exec into pod (open interactive shell)
+- `e` - Exec into pod (opens terminal choice menu)
 - `d` - Delete selected pod
 
 #### Deployments View
@@ -287,7 +293,6 @@ Potential features for future releases:
 - ConfigMaps and Secrets management
 - Real-time resource metrics (CPU/Memory)
 - Port forwarding
-- Exec into containers
 - YAML editing and apply
 - Resource describe view
 - Custom themes

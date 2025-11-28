@@ -35,7 +35,7 @@ The application will automatically connect to your current Kubernetes context an
 | Key | Action | Description |
 |-----|--------|-------------|
 | `l` | View Logs | Display logs for selected pod (last 100 lines) |
-| `e` | Exec into Pod | Open interactive shell in the selected pod |
+| `e` | Exec into Pod | Opens terminal choice menu - select embedded or native terminal |
 | `d` | Delete | Delete the selected pod |
 
 ### Deployments View (Press `2`)
@@ -169,23 +169,47 @@ The bottom of the screen shows:
 
 ### Exec into Pod (Terminal Access)
 
-Press `e` in the Pods view to open an interactive shell inside the selected pod.
+Press `e` in the Pods view to access a shell inside the selected pod with two options.
 
 **How it works:**
 1. Navigate to the Pods view (press `1`)
 2. Select a pod using `↑`/`↓` arrows
-3. Press `e` to exec into the pod
-4. An interactive shell will open (tries `/bin/sh`, falls back to `/bin/bash`)
-5. Type `exit` or press `Ctrl+D` to return to the TUI
+3. Press `e` to open the terminal choice menu
+4. Choose your preferred terminal type:
+
+#### Option 1: Embedded Terminal (Within TUI)
+- Select **[1] Embedded Terminal**
+- Opens a terminal session within the TUI interface
+- Good for quick commands and basic shell access
+- Press `Esc` to exit back to the TUI
+- **Note:** Limited support for interactive programs like irb (use native terminal instead)
+
+#### Option 2: Native Terminal Tab (Recommended for Interactive Tools)
+- Select **[2] Native Terminal Tab**
+- Opens a new tab in your terminal emulator
+- Full TTY support for interactive programs: `irb`, `rails console`, `python`, `node`
+- Supports readline, command history, auto-completion
+- Type `exit` or press `Ctrl+D` to close
+
+**Selecting an option:**
+- Use `↑`/`↓` arrow keys or `j`/`k` to navigate
+- Press `1` for embedded, `2` for native terminal
+- Press `Enter` to confirm selection
+- Press `Esc` to cancel
 
 **Example use cases:**
-- Debug application issues
-- Inspect file systems
-- Run diagnostic commands
-- Check environment variables
-- Test network connectivity
+- Run interactive REPLs: `irb`, `rails console`, `python`, `node` (use native terminal)
+- Debug application issues (either option)
+- Inspect file systems (either option)
+- Run diagnostic commands (either option)
+- Check environment variables (either option)
+- Test network connectivity (either option)
 
-**Note:** The pod must have `/bin/sh` or `/bin/bash` available.
+**Supported terminal emulators (for native terminal option):**
+- **macOS:** iTerm2, Terminal.app
+- **Linux:** gnome-terminal, konsole, xfce4-terminal, xterm
+
+**Note:** The pod must have `/bin/sh` or `/bin/bash` available. For native terminal, if auto-detection fails, you'll be shown the kubectl command to run manually.
 
 ### Built-in Help System
 

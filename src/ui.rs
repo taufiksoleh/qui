@@ -606,5 +606,34 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 
             f.render_widget(input, chunks[1]);
         }
+        InputMode::TerminalChoice => {
+            let options = vec![
+                if app.terminal_choice_selection == 0 {
+                    "▶ [1] Embedded Terminal - Basic shell access within TUI"
+                } else {
+                    "  [1] Embedded Terminal - Basic shell access within TUI"
+                },
+                if app.terminal_choice_selection == 1 {
+                    "▶ [2] Native Terminal Tab - Full terminal with irb, rails console support"
+                } else {
+                    "  [2] Native Terminal Tab - Full terminal with irb, rails console support"
+                },
+            ];
+
+            let menu_text = format!(
+                "{}\n\nUse ↑/↓ or 1/2 to choose, Enter to confirm, Esc to cancel",
+                options.join("\n")
+            );
+
+            let menu = Paragraph::new(menu_text)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Choose Terminal Type"),
+                )
+                .style(Style::default().fg(Color::Cyan));
+
+            f.render_widget(menu, chunks[1]);
+        }
     }
 }

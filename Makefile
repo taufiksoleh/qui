@@ -45,27 +45,33 @@ check:
 
 ## fmt: Format code with rustfmt
 fmt:
-	cargo fmt
+	cargo fmt --all
 
 ## fmt-check: Check if code is formatted
 fmt-check:
-	cargo fmt -- --check
+	cargo fmt --all -- --check
+
+## fix-fmt: Fix formatting issues
+fix-fmt:
+	cargo fmt --all
 
 ## lint: Run clippy linter
 lint:
-	cargo clippy -- -D warnings
+	cargo clippy --all-features -- -D warnings
 
 ## clippy: Run clippy with all features (alias for lint)
 clippy: lint
+
+## fix-clippy: Automatically fix clippy warnings
+fix-clippy:
+	cargo clippy --all-features --fix --allow-dirty --allow-staged
 
 ## fix: Automatically fix lint warnings
 fix:
 	cargo fix --allow-dirty --allow-staged
 
-## fix-all: Automatically fix lint warnings and format code
-fix-all:
-	cargo fix --allow-dirty --allow-staged
-	cargo fmt
+## fix-all: Fix clippy issues and format code
+fix-all: fix-clippy fix-fmt
 
 ## clean: Remove build artifacts
 clean:

@@ -260,15 +260,12 @@ end tell"#,
         let terminals = vec![
             ("gnome-terminal", vec!["--tab", "--", "bash", "-c", command]),
             ("konsole", vec!["--new-tab", "-e", "bash", "-c", command]),
-            (
-                "xfce4-terminal",
-                vec!["--tab", "-e", xfce_cmd.as_str()],
-            ),
+            ("xfce4-terminal", vec!["--tab", "-e", xfce_cmd.as_str()]),
             ("xterm", vec!["-e", "bash", "-c", command]),
         ];
 
         for (term, args) in terminals {
-            if let Ok(_) = Command::new(term).args(&args).spawn() {
+            if Command::new(term).args(&args).spawn().is_ok() {
                 return Ok(());
             }
         }

@@ -53,7 +53,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
-    let tabs = vec![
+    let tabs = [
         ("1", "Pods", View::Pods),
         ("2", "Deployments", View::Deployments),
         ("3", "Services", View::Services),

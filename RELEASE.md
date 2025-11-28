@@ -1,6 +1,6 @@
 # Release Process
 
-This document describes the release process for Kube-TUI and the automated build pipeline.
+This document describes the release process for QUI and the automated build pipeline.
 
 ## Automated Build Pipeline
 
@@ -55,10 +55,10 @@ You can also manually trigger the release workflow from the GitHub Actions tab w
 
 Each release includes the following artifacts:
 
-- `kube-tui-linux-x86_64.tar.gz` - Linux x86_64 binary
-- `kube-tui-linux-aarch64.tar.gz` - Linux ARM64 binary
-- `kube-tui-macos-x86_64.tar.gz` - macOS Intel binary
-- `kube-tui-macos-aarch64.tar.gz` - macOS Apple Silicon binary
+- `qui-linux-x86_64.tar.gz` - Linux x86_64 binary
+- `qui-linux-aarch64.tar.gz` - Linux ARM64 binary
+- `qui-macos-x86_64.tar.gz` - macOS Intel binary
+- `qui-macos-aarch64.tar.gz` - macOS Apple Silicon binary
 
 ## Installing Released Binaries
 
@@ -87,29 +87,29 @@ INSTALL_DIR=$HOME/.local/bin ./install.sh
 #### Linux (x86_64)
 
 ```bash
-curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-linux-x86_64.tar.gz | tar xz
-sudo mv kube-tui /usr/local/bin/
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/qui-linux-x86_64.tar.gz | tar xz
+sudo mv qui /usr/local/bin/
 ```
 
 #### Linux (ARM64)
 
 ```bash
-curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-linux-aarch64.tar.gz | tar xz
-sudo mv kube-tui /usr/local/bin/
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/qui-linux-aarch64.tar.gz | tar xz
+sudo mv qui /usr/local/bin/
 ```
 
 #### macOS (Intel)
 
 ```bash
-curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-x86_64.tar.gz | tar xz
-sudo mv kube-tui /usr/local/bin/
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/qui-macos-x86_64.tar.gz | tar xz
+sudo mv qui /usr/local/bin/
 ```
 
 #### macOS (Apple Silicon)
 
 ```bash
-curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-aarch64.tar.gz | tar xz
-sudo mv kube-tui /usr/local/bin/
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/qui-macos-aarch64.tar.gz | tar xz
+sudo mv qui /usr/local/bin/
 ```
 
 ## Version Numbering
@@ -162,9 +162,9 @@ cargo build --release --target aarch64-apple-darwin
 
 # Combine into universal binary
 lipo -create \
-  target/x86_64-apple-darwin/release/kube-tui \
-  target/aarch64-apple-darwin/release/kube-tui \
-  -output kube-tui-universal
+  target/x86_64-apple-darwin/release/qui \
+  target/aarch64-apple-darwin/release/qui \
+  -output qui-universal
 ```
 
 ### Testing Binaries
@@ -173,10 +173,10 @@ After download, verify the binary:
 
 ```bash
 # Check binary type
-file kube-tui
+file qui
 
 # Check it runs
-./kube-tui --version  # (if version flag is implemented)
+./qui --version  # (if version flag is implemented)
 ```
 
 ## Manual Release Process (Fallback)
@@ -191,7 +191,7 @@ If automated releases fail, you can create releases manually:
 2. Create a tarball:
    ```bash
    cd target/release
-   tar -czf kube-tui-<platform>.tar.gz kube-tui
+   tar -czf qui-<platform>.tar.gz qui
    ```
 
 3. Create a GitHub Release manually and upload the tarball

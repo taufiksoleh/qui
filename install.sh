@@ -1,6 +1,6 @@
 #!/bin/bash
-# Kube-TUI Installation Script
-# This script automatically detects your system and installs the latest version of kube-tui
+# QUI Installation Script
+# This script automatically detects your system and installs the latest version of QUI
 
 set -e
 
@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO="taufiksoleh/qui"
-BINARY_NAME="kube-tui"
+BINARY_NAME="qui"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
 # Function to print colored messages
@@ -107,7 +107,7 @@ get_latest_version() {
             print_error "No releases found for this repository"
             echo ""
             print_info "This project doesn't have any published releases yet."
-            print_info "To install kube-tui, you can build from source:"
+            print_info "To install QUI, you can build from source:"
             echo ""
             echo "  # Clone the repository"
             echo "  git clone https://github.com/$REPO.git"
@@ -134,7 +134,7 @@ get_latest_version() {
             print_error "No releases found for this repository"
             echo ""
             print_info "This project doesn't have any published releases yet."
-            print_info "To install kube-tui, you can build from source:"
+            print_info "To install QUI, you can build from source:"
             echo ""
             echo "  # Clone the repository"
             echo "  git clone https://github.com/$REPO.git"
@@ -246,7 +246,7 @@ verify_installation() {
 main() {
     echo ""
     echo "╔═══════════════════════════════════════════╗"
-    echo "║   Kube-TUI Installation Script           ║"
+    echo "║   QUI Installation Script                ║"
     echo "║   Kubernetes Terminal UI                 ║"
     echo "╚═══════════════════════════════════════════╝"
     echo ""

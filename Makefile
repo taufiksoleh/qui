@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 
 # Binary name
-BINARY_NAME := kube-tui
+BINARY_NAME := qui
 INSTALL_PATH := /usr/local/bin
 
 ## help: Show this help message

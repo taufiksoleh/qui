@@ -1,11 +1,11 @@
-# Kube-TUI Usage Guide
+# QUI Usage Guide
 
 A Terminal User Interface for managing Kubernetes resources with easy navigation and cluster/namespace switching.
 
 ## Starting the Application
 
 ```bash
-kube-tui
+qui
 ```
 
 The application will automatically connect to your current Kubernetes context and display pods in the default namespace.

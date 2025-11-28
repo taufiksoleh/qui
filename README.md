@@ -1,10 +1,10 @@
-# Kube-TUI - Kubernetes Terminal UI
+# QUI - Kubernetes Terminal UI
 
 [![CI](https://github.com/taufiksoleh/qui/workflows/CI/badge.svg)](https://github.com/taufiksoleh/qui/actions/workflows/ci.yml)
 [![Test Installation](https://github.com/taufiksoleh/qui/workflows/Test%20Installation%20Script/badge.svg)](https://github.com/taufiksoleh/qui/actions/workflows/test-install.yml)
 [![Release](https://github.com/taufiksoleh/qui/workflows/Release%20Build/badge.svg)](https://github.com/taufiksoleh/qui/actions/workflows/release.yml)
 
-A powerful terminal user interface (TUI) for managing Kubernetes clusters, written in Rust. Kube-TUI provides an intuitive, interactive way to manage your Kubernetes resources without the complexity of kubectl commands.
+A powerful terminal user interface (TUI) for managing Kubernetes clusters, written in Rust. QUI provides an intuitive, interactive way to manage your Kubernetes resources without the complexity of kubectl commands.
 
 ## Features
 
@@ -65,20 +65,20 @@ Pre-built binaries are available for Linux and macOS on the [releases page](http
 
 **Linux (x86_64):**
 ```bash
-curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-linux-x86_64.tar.gz | tar xz
-sudo mv kube-tui /usr/local/bin/
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/qui-linux-x86_64.tar.gz | tar xz
+sudo mv qui /usr/local/bin/
 ```
 
 **macOS (Intel):**
 ```bash
-curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-x86_64.tar.gz | tar xz
-sudo mv kube-tui /usr/local/bin/
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/qui-macos-x86_64.tar.gz | tar xz
+sudo mv qui /usr/local/bin/
 ```
 
 **macOS (Apple Silicon):**
 ```bash
-curl -L https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-macos-aarch64.tar.gz | tar xz
-sudo mv kube-tui /usr/local/bin/
+curl -L https://github.com/taufiksoleh/qui/releases/latest/download/qui-macos-aarch64.tar.gz | tar xz
+sudo mv qui /usr/local/bin/
 ```
 
 See [RELEASE.md](RELEASE.md) for more installation options and platform-specific instructions.
@@ -86,12 +86,12 @@ See [RELEASE.md](RELEASE.md) for more installation options and platform-specific
 ### Build from source
 
 ```bash
-git clone https://github.com/yourusername/kube-tui.git
-cd kube-tui
+git clone https://github.com/yourusername/qui.git
+cd qui
 cargo build --release
 ```
 
-The binary will be available at `target/release/kube-tui`
+The binary will be available at `target/release/qui`
 
 ### Run directly
 
@@ -104,7 +104,7 @@ cargo run --release
 Launch the application:
 
 ```bash
-./target/release/kube-tui
+./target/release/qui
 # or
 cargo run --release
 ```
@@ -233,7 +233,7 @@ Lists services with:
 
 ## Configuration
 
-Kube-TUI uses your Kubernetes configuration:
+QUI uses your Kubernetes configuration:
 - Config file: `~/.kube/config` or path from `$KUBECONFIG` environment variable
 - Context: Uses the current context (can be switched from within the app using `4`)
 - Authentication: Inherits from kubectl configuration

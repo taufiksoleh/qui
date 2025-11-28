@@ -27,7 +27,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let mut title = vec![Span::styled(
-        "Kubernetes TUI",
+        "QUI - Kubernetes TUI",
         Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD),
@@ -402,7 +402,7 @@ fn render_namespaces_view(f: &mut Frame, app: &App, area: Rect) {
 fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
     let help_text = vec![
         Line::from(vec![Span::styled(
-            "Kube-TUI Quick Reference",
+            "QUI Quick Reference",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),

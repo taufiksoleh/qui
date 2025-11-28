@@ -102,7 +102,7 @@ jobs:
           cat <<'EOF' > test_url.sh
           #!/bin/bash
           REPO="taufiksoleh/qui"
-          BINARY_NAME="kube-tui"
+          BINARY_NAME="qui"
 
           case "$(uname -s)" in
               Linux*) OS="linux" ;;
@@ -119,7 +119,7 @@ jobs:
           echo "Download URL: $URL"
 
           # Verify URL format
-          if [[ $URL =~ ^https://github.com/.+/releases/latest/download/kube-tui-(linux|macos)-(x86_64|aarch64).tar.gz$ ]]; then
+          if [[ $URL =~ ^https://github.com/.+/releases/latest/download/qui-(linux|macos)-(x86_64|aarch64).tar.gz$ ]]; then
             echo "✓ URL format is correct"
           else
             echo "✗ URL format is incorrect"
@@ -159,13 +159,13 @@ jobs:
           echo "✓ Created install directory"
 
           # Simulate binary creation
-          echo "#!/bin/bash" > "$TEMP_DIR/kube-tui"
-          echo 'echo "kube-tui test binary"' >> "$TEMP_DIR/kube-tui"
-          chmod +x "$TEMP_DIR/kube-tui"
+          echo "#!/bin/bash" > "$TEMP_DIR/qui"
+          echo 'echo "qui test binary"' >> "$TEMP_DIR/qui"
+          chmod +x "$TEMP_DIR/qui"
           echo "✓ Created test binary"
 
           # Test binary
-          if [ -x "$TEMP_DIR/kube-tui" ]; then
+          if [ -x "$TEMP_DIR/qui" ]; then
             echo "✓ Binary is executable"
           else
             echo "✗ Binary is not executable"
@@ -173,26 +173,26 @@ jobs:
           fi
 
           # Simulate installation
-          cp "$TEMP_DIR/kube-tui" "$INSTALL_DIR/kube-tui"
+          cp "$TEMP_DIR/qui" "$INSTALL_DIR/qui"
           echo "✓ Installed binary to $INSTALL_DIR"
 
           # Verify installation
-          if [ -f "$INSTALL_DIR/kube-tui" ]; then
-            echo "✓ Binary exists at $INSTALL_DIR/kube-tui"
+          if [ -f "$INSTALL_DIR/qui" ]; then
+            echo "✓ Binary exists at $INSTALL_DIR/qui"
           else
             echo "✗ Binary not found"
             exit 1
           fi
 
           # Test execution
-          if "$INSTALL_DIR/kube-tui" >/dev/null 2>&1; then
+          if "$INSTALL_DIR/qui" >/dev/null 2>&1; then
             echo "✓ Binary is executable after installation"
           else
             echo "✓ Binary exists (actual execution would require real binary)"
           fi
 
           # Cleanup
-          rm -f "$INSTALL_DIR/kube-tui"
+          rm -f "$INSTALL_DIR/qui"
           rm -rf "$TEMP_DIR"
           echo "✓ Cleanup completed"
 
@@ -200,7 +200,7 @@ jobs:
           EOF
 
           chmod +x test_install_flow.sh
-          INSTALL_DIR="$HOME/.test-kube-tui" ./test_install_flow.sh
+          INSTALL_DIR="$HOME/.test-qui" ./test_install_flow.sh
 
       - name: Test permission detection
         run: |

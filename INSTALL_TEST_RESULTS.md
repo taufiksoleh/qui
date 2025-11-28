@@ -38,13 +38,13 @@ Tested architecture detection for:
 
 **Current Environment:**
 - Detected: `x86_64`
-- Binary name: `kube-tui-linux-x86_64.tar.gz`
+- Binary name: `qui-linux-x86_64.tar.gz`
 
 ### 4. URL Construction Tests
 **Status:** ✓ PASSED
 
 - ✓ GitHub API version fetching (with fallback)
-- ✓ URL format: `https://github.com/taufiksoleh/qui/releases/latest/download/kube-tui-{os}-{arch}.tar.gz`
+- ✓ URL format: `https://github.com/taufiksoleh/qui/releases/latest/download/qui-{os}-{arch}.tar.gz`
 - ✓ Handles missing releases gracefully (uses 'latest' URL)
 
 ### 5. Permission Handling Tests

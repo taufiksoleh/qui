@@ -53,6 +53,8 @@ async fn run_app<B: ratatui::backend::Backend>(
     let mut event_handler = EventHandler::new();
     let mut last_log_refresh = Instant::now();
     let log_refresh_interval = Duration::from_secs(2); // Refresh logs every 2 seconds
+    let mut last_terminal_refresh = Instant::now();
+    let terminal_refresh_interval = Duration::from_millis(50); // Refresh terminal every 50ms for smooth updates
 
     loop {
         terminal.draw(|f| ui(f, &mut app))?;
@@ -63,9 +65,12 @@ async fn run_app<B: ratatui::backend::Backend>(
             last_log_refresh = Instant::now();
         }
 
-        // Refresh terminal if in terminal view
+        // Refresh terminal more frequently for smooth interactive commands
         if matches!(app.current_view, app::View::Terminal) {
-            app.refresh_terminal();
+            if last_terminal_refresh.elapsed() >= terminal_refresh_interval {
+                app.refresh_terminal();
+                last_terminal_refresh = Instant::now();
+            }
         }
 
         if let Some(event) = event_handler.next()? {

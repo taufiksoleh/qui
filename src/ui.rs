@@ -508,16 +508,36 @@ fn render_help_view(f: &mut Frame, _app: &App, area: Rect) {
 
 fn render_terminal_view(f: &mut Frame, app: &App, area: Rect) {
     let title = if let Some(pod_name) = &app.terminal_pod_name {
-        format!("Terminal - Pod: {} (Press Esc or Ctrl+D to exit)", pod_name)
+        format!(
+            "Terminal - Pod: {} | Ruby/Rails: 'irb' or 'bin/rails c' | PgUp/PgDn: Scroll | Esc/Ctrl+D: Exit",
+            pod_name
+        )
     } else {
         "Terminal (Press Esc or Ctrl+D to exit)".to_string()
     };
 
     let content = if let Some(lines) = app.get_terminal_screen() {
         if lines.is_empty() {
-            "Connecting to pod shell...\nWaiting for response...".to_string()
+            "Connecting to pod shell...\n\nTip: Common commands for Ruby/Rails:\n  - irb                  (Interactive Ruby)\n  - bin/rails console    (Rails console)\n  - bundle exec rails c  (Rails console via bundler)\n  - bin/console          (Custom console script)\n\nWaiting for response...".to_string()
         } else {
-            lines.join("\n")
+            // Show the last N lines that fit in the viewport
+            let visible_height = area.height.saturating_sub(2) as usize; // -2 for borders
+            let total_lines = lines.len();
+
+            // Calculate scroll position
+            let scroll = app.terminal_scroll.min(total_lines.saturating_sub(visible_height));
+
+            // Get the visible slice
+            let start = if scroll == 0 && total_lines > visible_height {
+                // Auto-scroll to bottom if not manually scrolled
+                total_lines.saturating_sub(visible_height)
+            } else {
+                scroll
+            };
+
+            let end = (start + visible_height).min(total_lines);
+
+            lines[start..end].join("\n")
         }
     } else {
         "Connecting to pod...".to_string()

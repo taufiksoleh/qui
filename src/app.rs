@@ -48,6 +48,7 @@ pub struct App {
     pub status_message: String,
     pub terminal_session: Option<Arc<Mutex<TerminalSession>>>,
     pub terminal_pod_name: Option<String>,
+    pub terminal_scroll: usize,
 }
 
 impl App {
@@ -127,6 +128,7 @@ impl App {
             status_message: String::new(),
             terminal_session: None,
             terminal_pod_name: None,
+            terminal_scroll: 0,
         };
 
         // Only try to refresh if we don't have an error
@@ -593,8 +595,16 @@ impl App {
             let pod_name = pod.name.clone();
 
             // Spawn terminal creation in a blocking task to avoid blocking the UI
+            // Try bash first (better for Ruby/Rails), fall back to sh if it fails
             let result = tokio::task::spawn_blocking(move || {
-                TerminalSession::new(&namespace, &pod_name)
+                // Try bash first
+                match TerminalSession::new_with_shell(&namespace, &pod_name, Some("/bin/bash")) {
+                    Ok(session) => Ok(session),
+                    Err(_) => {
+                        // Fall back to sh
+                        TerminalSession::new_with_shell(&namespace, &pod_name, Some("/bin/sh"))
+                    }
+                }
             }).await;
 
             match result {
@@ -602,10 +612,10 @@ impl App {
                     self.terminal_session = Some(Arc::new(Mutex::new(session)));
                     self.terminal_pod_name = Some(pod.name.clone());
                     self.current_view = View::Terminal;
-                    self.status_message = format!("Connected to pod: {}", pod.name);
+                    self.status_message = format!("Connected to pod: {} | Tip: For Rails console run 'bin/rails c' or 'bundle exec rails c'", pod.name);
                 }
                 Ok(Err(e)) => {
-                    self.error_message = Some(format!("Failed to exec into pod: {}. Make sure kubectl is installed and the pod has /bin/sh", e));
+                    self.error_message = Some(format!("Failed to exec into pod: {}. Make sure kubectl is installed and the pod has /bin/bash or /bin/sh", e));
                 }
                 Err(e) => {
                     self.error_message = Some(format!("Failed to spawn terminal task: {}", e));
@@ -632,12 +642,30 @@ impl App {
             return Ok(true);
         }
 
-        // Forward all input to the terminal
+        // Handle Page Up/Down for scrolling (don't send to terminal)
+        match event.key_code() {
+            KeyCode::PageUp => {
+                if self.terminal_scroll > 0 {
+                    self.terminal_scroll = self.terminal_scroll.saturating_sub(10);
+                }
+                return Ok(true);
+            }
+            KeyCode::PageDown => {
+                self.terminal_scroll = self.terminal_scroll.saturating_add(10);
+                return Ok(true);
+            }
+            _ => {}
+        }
+
+        // Forward all other input to the terminal
         if let Some(session) = &self.terminal_session {
             if let Ok(mut session) = session.lock() {
                 session.send_input(&event)?;
             }
         }
+
+        // Reset scroll when user types
+        self.terminal_scroll = 0;
 
         Ok(true)
     }
@@ -650,6 +678,7 @@ impl App {
         }
         self.terminal_session = None;
         self.terminal_pod_name = None;
+        self.terminal_scroll = 0;
     }
 
     pub fn get_terminal_screen(&self) -> Option<Vec<String>> {

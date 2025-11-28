@@ -141,15 +141,27 @@ pub struct TerminalSession {
     child: Box<dyn portable_pty::Child + Send + Sync>,
     rx: Receiver<Vec<u8>>,
     _reader_thread: Option<thread::JoinHandle<()>>,
+    rows: u16,
+    #[allow(dead_code)]
+    cols: u16,
 }
 
 impl TerminalSession {
+    #[allow(dead_code)]
     pub fn new(namespace: &str, pod_name: &str) -> Result<Self> {
+        Self::new_with_shell(namespace, pod_name, None)
+    }
+
+    pub fn new_with_shell(namespace: &str, pod_name: &str, shell: Option<&str>) -> Result<Self> {
         let pty_system = NativePtySystem::default();
 
+        // Use larger terminal size for better compatibility
+        let rows = 40;
+        let cols = 120;
+
         let pair = pty_system.openpty(PtySize {
-            rows: 24,
-            cols: 80,
+            rows,
+            cols,
             pixel_width: 0,
             pixel_height: 0,
         })?;
@@ -161,7 +173,13 @@ impl TerminalSession {
         cmd.arg(namespace);
         cmd.arg(pod_name);
         cmd.arg("--");
-        cmd.arg("/bin/sh");
+
+        // Set TERM environment variable for better compatibility
+        cmd.env("TERM", "xterm-256color");
+
+        // Try the specified shell or default to bash (better for Ruby/Rails)
+        let shell_cmd = shell.unwrap_or("/bin/bash");
+        cmd.arg(shell_cmd);
 
         let child = pair.slave.spawn_command(cmd)?;
 
@@ -173,7 +191,7 @@ impl TerminalSession {
 
         // Spawn a thread to read from the PTY
         let reader_thread = thread::spawn(move || {
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; 8192]; // Larger buffer for better throughput
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break, // EOF
@@ -188,11 +206,13 @@ impl TerminalSession {
         });
 
         Ok(Self {
-            parser: Parser::new(24, 80, 1000),
+            parser: Parser::new(rows, cols, 5000), // Larger scrollback buffer
             writer,
             child,
             rx,
             _reader_thread: Some(reader_thread),
+            rows,
+            cols,
         })
     }
 
@@ -251,9 +271,19 @@ impl TerminalSession {
 
         let screen = self.parser.screen();
 
-        // Get the entire screen contents as a string and split by lines
+        // Get the entire screen contents including scrollback
         let contents = screen.contents();
-        contents.lines().map(|s| s.to_string()).collect()
+
+        // Split by lines and preserve all content
+        let lines: Vec<String> = contents.lines().map(|s| s.to_string()).collect();
+
+        // If we have fewer lines than the terminal height, pad with empty lines
+        let mut result = lines;
+        while result.len() < self.rows as usize {
+            result.push(String::new());
+        }
+
+        result
     }
 
     pub fn close(&mut self) -> Result<()> {

@@ -59,6 +59,28 @@ To install to a custom directory:
 INSTALL_DIR=$HOME/.local/bin ./install.sh
 ```
 
+### Homebrew (macOS and Linux)
+
+Install using Homebrew by tapping the QUI repository:
+
+```bash
+brew tap taufiksoleh/qui
+brew install qui
+```
+
+Or install directly:
+
+```bash
+brew install taufiksoleh/qui/qui
+```
+
+To upgrade to the latest version:
+
+```bash
+brew update
+brew upgrade qui
+```
+
 ### Manual Installation
 
 Pre-built binaries are available for Linux and macOS on the [releases page](https://github.com/taufiksoleh/qui/releases).

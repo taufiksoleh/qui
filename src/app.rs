@@ -3,7 +3,9 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use std::sync::{Arc, Mutex};
 
 use crate::events::InputEvent;
-use crate::kube_client::{ContextInfo, DeploymentInfo, KubeClient, PodInfo, ServiceInfo, TerminalSession};
+use crate::kube_client::{
+    ContextInfo, DeploymentInfo, KubeClient, PodInfo, ServiceInfo, TerminalSession,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum View {
@@ -87,7 +89,12 @@ impl App {
                             "Failed to connect to cluster '{}': {}. Please switch to a valid context (Press 4 for Clusters view).",
                             current_context, e
                         );
-                        (client, vec!["default".to_string()], View::Clusters, Some(error_msg))
+                        (
+                            client,
+                            vec!["default".to_string()],
+                            View::Clusters,
+                            Some(error_msg),
+                        )
                     }
                 }
             }
@@ -337,14 +344,16 @@ impl App {
                         TerminalSession::new_with_shell(&namespace, &pod_name, Some("/bin/sh"))
                     }
                 }
-            }).await;
+            })
+            .await;
 
             match result {
                 Ok(Ok(session)) => {
                     self.terminal_session = Some(Arc::new(Mutex::new(session)));
                     self.terminal_pod_name = Some(pod.name.clone());
                     self.current_view = View::Terminal;
-                    self.status_message = format!("Connected to pod: {} | Press Esc to exit", pod.name);
+                    self.status_message =
+                        format!("Connected to pod: {} | Press Esc to exit", pod.name);
                 }
                 Ok(Err(e)) => {
                     self.error_message = Some(format!("Failed to exec into pod: {}. Make sure kubectl is installed and the pod has /bin/bash or /bin/sh", e));
@@ -372,7 +381,8 @@ impl App {
                 }
                 Err(e) => {
                     self.error_message = Some(format!(
-                        "Failed to open terminal tab: {}. Falling back to manual command...", e
+                        "Failed to open terminal tab: {}. Falling back to manual command...",
+                        e
                     ));
                     // Show the manual command as a fallback
                     self.status_message = format!(

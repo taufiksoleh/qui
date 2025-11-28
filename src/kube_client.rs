@@ -195,10 +195,7 @@ end tell"#,
             command.replace('"', "\\\"")
         );
 
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .output()?;
+        let output = Command::new("osascript").arg("-e").arg(&script).output()?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
@@ -220,10 +217,7 @@ end tell"#,
             command.replace('"', "\\\"")
         );
 
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .output()?;
+        let output = Command::new("osascript").arg("-e").arg(&script).output()?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
@@ -265,7 +259,10 @@ end tell"#,
         let terminals = vec![
             ("gnome-terminal", vec!["--tab", "--", "bash", "-c", command]),
             ("konsole", vec!["--new-tab", "-e", "bash", "-c", command]),
-            ("xfce4-terminal", vec!["--tab", "-e", &format!("bash -c '{}'", command)]),
+            (
+                "xfce4-terminal",
+                vec!["--tab", "-e", &format!("bash -c '{}'", command)],
+            ),
             ("xterm", vec!["-e", "bash", "-c", command]),
         ];
 
@@ -325,7 +322,7 @@ impl TerminalSession {
         cmd.arg("--");
         cmd.arg("env");
         cmd.arg("TERM=xterm-256color");
-        cmd.arg("PS1=$ ");  // Simple prompt to avoid issues
+        cmd.arg("PS1=$ "); // Simple prompt to avoid issues
 
         // Try the specified shell or default to bash (better for Ruby/Rails)
         let shell_cmd = shell.unwrap_or("/bin/bash");

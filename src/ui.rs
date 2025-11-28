@@ -94,8 +94,8 @@ fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
             .add_modifier(Modifier::ITALIC),
     ));
 
-    let tabs_paragraph = Paragraph::new(Line::from(tab_spans))
-        .block(Block::default().borders(Borders::ALL));
+    let tabs_paragraph =
+        Paragraph::new(Line::from(tab_spans)).block(Block::default().borders(Borders::ALL));
 
     f.render_widget(tabs_paragraph, area);
 }
@@ -525,7 +525,9 @@ fn render_terminal_view(f: &mut Frame, app: &App, area: Rect) {
             let total_lines = lines.len();
 
             // Calculate scroll position
-            let scroll = app.terminal_scroll.min(total_lines.saturating_sub(visible_height));
+            let scroll = app
+                .terminal_scroll
+                .min(total_lines.saturating_sub(visible_height));
 
             // Get the visible slice
             let start = if scroll == 0 && total_lines > visible_height {

@@ -56,9 +56,11 @@ You can also manually trigger the release workflow from the GitHub Actions tab w
 Each release includes the following artifacts:
 
 - `qui-linux-x86_64.tar.gz` - Linux x86_64 binary
-- `qui-linux-aarch64.tar.gz` - Linux ARM64 binary
+- `qui-linux-x86_64.tar.gz.sha256` - Linux x86_64 SHA256 checksum
 - `qui-macos-x86_64.tar.gz` - macOS Intel binary
+- `qui-macos-x86_64.tar.gz.sha256` - macOS Intel SHA256 checksum
 - `qui-macos-aarch64.tar.gz` - macOS Apple Silicon binary
+- `qui-macos-aarch64.tar.gz.sha256` - macOS Apple Silicon SHA256 checksum
 
 ## Installing Released Binaries
 
@@ -81,6 +83,17 @@ Custom installation directory:
 ```bash
 INSTALL_DIR=$HOME/.local/bin ./install.sh
 ```
+
+### Homebrew (macOS and Linux)
+
+Install using Homebrew:
+
+```bash
+brew tap taufiksoleh/qui
+brew install qui
+```
+
+The Homebrew formula is automatically updated with each release. See [HOMEBREW.md](HOMEBREW.md) for more details.
 
 ### Manual Installation by Platform
 
@@ -196,13 +209,21 @@ If automated releases fail, you can create releases manually:
 
 3. Create a GitHub Release manually and upload the tarball
 
+## Implemented Features
+
+The release process includes:
+- ✅ SHA256 checksums for all binaries
+- ✅ Homebrew tap with automatic formula updates
+- ✅ Multi-platform builds (Linux x86_64, macOS Intel, macOS Apple Silicon)
+- ✅ Automated release creation with GitHub Actions
+- ✅ Automatic installation script
+
 ## Future Enhancements
 
 Planned improvements to the release process:
 - Windows builds (requires WSL2 or containerized builds)
 - Docker images published to GitHub Container Registry
-- Checksums (SHA256) for all binaries
 - Binary signing for macOS (requires Apple Developer account)
-- Homebrew tap for easy macOS installation
 - APT/YUM repositories for Linux distributions
 - Automated changelog generation
+- Linux ARM64 builds

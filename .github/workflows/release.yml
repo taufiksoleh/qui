@@ -77,11 +77,20 @@ jobs:
           tar -czf ${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
           cd -
 
+      - name: Generate SHA256 checksum
+        run: |
+          cd target/${{ matrix.target }}/release
+          shasum -a 256 ${{ matrix.asset_name }}.tar.gz > ${{ matrix.asset_name }}.tar.gz.sha256
+          cat ${{ matrix.asset_name }}.tar.gz.sha256
+          cd -
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: target/${{ matrix.target }}/release/${{ matrix.asset_name }}.tar.gz
+          path: |
+            target/${{ matrix.target }}/release/${{ matrix.asset_name }}.tar.gz
+            target/${{ matrix.target }}/release/${{ matrix.asset_name }}.tar.gz.sha256
 
   release:
     name: Create Release
@@ -100,9 +109,67 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*.tar.gz
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.sha256
           draft: false
           prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew-formula:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Update Homebrew Formula
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+
+          # Read SHA256 checksums
+          LINUX_X86_64_SHA=$(cat artifacts/qui-linux-x86_64/qui-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
+          MACOS_X86_64_SHA=$(cat artifacts/qui-macos-x86_64/qui-macos-x86_64.tar.gz.sha256 | awk '{print $1}')
+          MACOS_AARCH64_SHA=$(cat artifacts/qui-macos-aarch64/qui-macos-aarch64.tar.gz.sha256 | awk '{print $1}')
+
+          echo "Updating formula with version $VERSION"
+          echo "Linux x86_64 SHA: $LINUX_X86_64_SHA"
+          echo "macOS x86_64 SHA: $MACOS_X86_64_SHA"
+          echo "macOS aarch64 SHA: $MACOS_AARCH64_SHA"
+
+          # Update the formula file
+          sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/qui.rb
+          sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" Formula/qui.rb
+          sed -i "s/PLACEHOLDER_X86_64_SHA256/$MACOS_X86_64_SHA/" Formula/qui.rb
+          sed -i "s/PLACEHOLDER_AARCH64_SHA256/$MACOS_AARCH64_SHA/" Formula/qui.rb
+          sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" Formula/qui.rb
+
+          # Show the updated formula
+          echo "Updated formula:"
+          cat Formula/qui.rb
+
+      - name: Commit and push formula update
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Formula/qui.rb
+          git commit -m "Update Homebrew formula to v${{ steps.get_version.outputs.version }}" || echo "No changes to commit"
+          git push origin HEAD:main || git push origin HEAD:master

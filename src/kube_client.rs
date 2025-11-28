@@ -229,7 +229,7 @@ end tell"#,
 
     #[cfg(target_os = "linux")]
     fn open_gnome_terminal_tab(command: &str) -> Result<()> {
-        let output = Command::new("gnome-terminal")
+        let _output = Command::new("gnome-terminal")
             .arg("--tab")
             .arg("--")
             .arg("bash")
@@ -242,7 +242,7 @@ end tell"#,
 
     #[cfg(target_os = "linux")]
     fn open_konsole_tab(command: &str) -> Result<()> {
-        let output = Command::new("konsole")
+        let _output = Command::new("konsole")
             .arg("--new-tab")
             .arg("-e")
             .arg("bash")
@@ -256,12 +256,13 @@ end tell"#,
     #[cfg(target_os = "linux")]
     fn open_generic_linux_terminal(command: &str) -> Result<()> {
         // Try common terminals in order
+        let xfce_cmd = format!("bash -c '{}'", command);
         let terminals = vec![
             ("gnome-terminal", vec!["--tab", "--", "bash", "-c", command]),
             ("konsole", vec!["--new-tab", "-e", "bash", "-c", command]),
             (
                 "xfce4-terminal",
-                vec!["--tab", "-e", &format!("bash -c '{}'", command)],
+                vec!["--tab", "-e", xfce_cmd.as_str()],
             ),
             ("xterm", vec!["-e", "bash", "-c", command]),
         ];

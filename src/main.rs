@@ -66,11 +66,11 @@ async fn run_app<B: ratatui::backend::Backend>(
         }
 
         // Refresh terminal more frequently for smooth interactive commands
-        if matches!(app.current_view, app::View::Terminal) {
-            if last_terminal_refresh.elapsed() >= terminal_refresh_interval {
-                app.refresh_terminal();
-                last_terminal_refresh = Instant::now();
-            }
+        if matches!(app.current_view, app::View::Terminal)
+            && last_terminal_refresh.elapsed() >= terminal_refresh_interval
+        {
+            app.refresh_terminal();
+            last_terminal_refresh = Instant::now();
         }
 
         if let Some(event) = event_handler.next()? {

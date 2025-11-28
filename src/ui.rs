@@ -609,7 +609,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(input, chunks[1]);
         }
         InputMode::TerminalChoice => {
-            let options = vec![
+            let options = [
                 if app.terminal_choice_selection == 0 {
                     "▶ [1] Embedded Terminal - Basic shell access within TUI"
                 } else {

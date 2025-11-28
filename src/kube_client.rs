@@ -142,7 +142,7 @@ impl KubeClient {
         #[cfg(target_os = "macos")]
         {
             // Try iTerm2 first (more common for developers)
-            if let Ok(_) = std::env::var("ITERM_SESSION_ID") {
+            if std::env::var("ITERM_SESSION_ID").is_ok() {
                 Self::open_iterm_tab(&kubectl_cmd)?;
             } else if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
                 if term_program == "Apple_Terminal" {

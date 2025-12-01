@@ -122,7 +122,7 @@ jobs:
 
   update-homebrew-formula:
     name: Update Homebrew Formula
-    needs: build
+    needs: [build, release]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     env:
@@ -189,26 +189,23 @@ jobs:
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
 
-          # Try reading checksums from build artifacts; if missing, fetch from the GitHub Release
-          LINUX_X86_64_SHA_FILE="artifacts/qui-linux-x86_64/qui-linux-x86_64.tar.gz.sha256"
-          MACOS_X86_64_SHA_FILE="artifacts/qui-macos-x86_64/qui-macos-x86_64.tar.gz.sha256"
-          MACOS_AARCH64_SHA_FILE="artifacts/qui-macos-aarch64/qui-macos-aarch64.tar.gz.sha256"
+          # Wait for release to be available, then fetch checksums from the GitHub Release
+          echo "Waiting for release to be available..."
+          sleep 30  # Give some time for the release to be processed
 
-          if [ -f "$LINUX_X86_64_SHA_FILE" ] && [ -f "$MACOS_X86_64_SHA_FILE" ] && [ -f "$MACOS_AARCH64_SHA_FILE" ]; then
-            LINUX_X86_64_SHA=$(awk '{print $1}' "$LINUX_X86_64_SHA_FILE")
-            MACOS_X86_64_SHA=$(awk '{print $1}' "$MACOS_X86_64_SHA_FILE")
-            MACOS_AARCH64_SHA=$(awk '{print $1}' "$MACOS_AARCH64_SHA_FILE")
-          else
-            echo "Artifacts not found; fetching checksums from release v$VERSION"
-            curl -fsSL -o /tmp/qui-linux-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-linux-x86_64.tar.gz.sha256"
-            curl -fsSL -o /tmp/qui-macos-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-x86_64.tar.gz.sha256"
-            curl -fsSL -o /tmp/qui-macos-aarch64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-aarch64.tar.gz.sha256"
-            LINUX_X86_64_SHA=$(awk '{print $1}' /tmp/qui-linux-x86_64.tar.gz.sha256)
-            MACOS_X86_64_SHA=$(awk '{print $1}' /tmp/qui-macos-x86_64.tar.gz.sha256)
-            MACOS_AARCH64_SHA=$(awk '{print $1}' /tmp/qui-macos-aarch64.tar.gz.sha256)
-          fi
+          # Calculate checksums directly from the released binaries
+          echo "Calculating checksums from release v$VERSION binaries"
 
-          echo "Updating formula with version $VERSION"
+          # Download and calculate checksum for each platform
+          curl -fsSL "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-linux-x86_64.tar.gz" | shasum -a 256 | awk '{print $1}' > /tmp/linux_sha256
+          curl -fsSL "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-x86_64.tar.gz" | shasum -a 256 | awk '{print $1}' > /tmp/macos_x86_64_sha256
+          curl -fsSL "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-aarch64.tar.gz" | shasum -a 256 | awk '{print $1}' > /tmp/macos_aarch64_sha256
+
+          LINUX_X86_64_SHA=$(cat /tmp/linux_sha256)
+          MACOS_X86_64_SHA=$(cat /tmp/macos_x86_64_sha256)
+          MACOS_AARCH64_SHA=$(cat /tmp/macos_aarch64_sha256)
+
+          echo "Calculated checksums:"
           echo "Linux x86_64 SHA: $LINUX_X86_64_SHA"
           echo "macOS x86_64 SHA: $MACOS_X86_64_SHA"
           echo "macOS aarch64 SHA: $MACOS_AARCH64_SHA"

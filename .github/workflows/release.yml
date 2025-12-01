@@ -149,31 +149,45 @@ jobs:
       - name: Extract version from source
         id: get_version
         run: |
-          # Always use Cargo.toml version as source of truth
-          VERSION=$(grep -E '^version\s*=\s*"' Cargo.toml | head -1 | sed -E 's/.*"([^\"]+)".*/\1/')
-
-          # If this is a tag release, verify tag matches Cargo.toml version
+          # If this is a tag release, use tag version and update files
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            TAG_VERSION=${GITHUB_REF#refs/tags/v}
-            if [ "$TAG_VERSION" != "$VERSION" ]; then
-              echo "Error: Tag version $TAG_VERSION does not match Cargo.toml version $VERSION"
-              echo "Please update Cargo.toml version or create matching tag"
-              exit 1
+            # Extract version from tag (remove 'v' prefix if present)
+            TAG_VERSION=${GITHUB_REF#refs/tags/}
+            TAG_VERSION=${TAG_VERSION#v}
+            echo "Tag version detected: $TAG_VERSION"
+
+            # Get current Cargo.toml version
+            CARGO_VERSION=$(grep -E '^version\s*=\s*"' Cargo.toml | head -1 | sed -E 's/.*"([^\"]+)".*/\1/')
+            echo "Current Cargo.toml version: $CARGO_VERSION"
+
+            # Update Cargo.toml if versions differ
+            if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+              echo "Updating Cargo.toml version from $CARGO_VERSION to $TAG_VERSION"
+              sed -i.bak "s/^version = \".*\"/version = \"$TAG_VERSION\"/" Cargo.toml
+              git add Cargo.toml
+              git config --local user.email "github-actions[bot]@users.noreply.github.com"
+              git config --local user.name "github-actions[bot]"
+              git commit -m "chore(release): bump version to $TAG_VERSION in Cargo.toml" || echo "No Cargo.toml changes to commit"
             fi
+
+            VERSION="$TAG_VERSION"
+          else
+            # For workflow_dispatch, use current Cargo.toml version
+            VERSION=$(grep -E '^version\s*=\s*"' Cargo.toml | head -1 | sed -E 's/.*"([^\"]+)".*/\1/')
           fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
+          echo "Final version: $VERSION"
+
+      - name: Push version updates
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # Push all version updates back to repository
+          git push origin HEAD:main || git push origin HEAD:master
 
       - name: Update Homebrew Formula
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
-          FORMULA_VERSION=$(grep -E '^\s*version\s+"' tap/Formula/qui.rb | sed -E 's/.*"([^\"]+)".*/\1/')
-          if [ -n "$FORMULA_VERSION" ]; then
-            TARGET_VERSION="$FORMULA_VERSION"
-          else
-            TARGET_VERSION="$VERSION"
-          fi
 
           # Try reading checksums from build artifacts; if missing, fetch from the GitHub Release
           LINUX_X86_64_SHA_FILE="artifacts/qui-linux-x86_64/qui-linux-x86_64.tar.gz.sha256"
@@ -199,6 +213,13 @@ jobs:
           echo "macOS x86_64 SHA: $MACOS_X86_64_SHA"
           echo "macOS aarch64 SHA: $MACOS_AARCH64_SHA"
 
+          FORMULA_VERSION=$(grep -E '^\s*version\s+"' tap/Formula/qui.rb | sed -E 's/.*"([^\"]+)".*/\1/')
+          if [ -n "$FORMULA_VERSION" ]; then
+            TARGET_VERSION="$FORMULA_VERSION"
+          else
+            TARGET_VERSION="$VERSION"
+          fi
+
           # Update the formula file in the tap (used by brew install)
           sed -i "s/version \".*\"/version \"$TARGET_VERSION\"/" tap/Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$TARGET_VERSION/|g" tap/Formula/qui.rb
@@ -206,12 +227,21 @@ jobs:
           sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" tap/Formula/qui.rb
           sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" tap/Formula/qui.rb
 
-          # Keep local Formula/qui.rb in sync (use Cargo.toml version)
+          # Update local Formula/qui.rb in sync with tag version and checksums
+          echo "Updating local Formula/qui.rb to version $VERSION"
           sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" Formula/qui.rb
           sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" Formula/qui.rb
+
+          # Commit local formula updates if this is a tag release
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            git add Formula/qui.rb
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git commit -m "chore(release): update local formula to v$VERSION with checksums" || echo "No local formula changes to commit"
+          fi
 
           # Show the updated formula
           echo "Updated formula:"

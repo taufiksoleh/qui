@@ -80,7 +80,9 @@ jobs:
       - name: Generate SHA256 checksum
         run: |
           cd target/${{ matrix.target }}/release
-          shasum -a 256 ${{ matrix.asset_name }}.tar.gz > ${{ matrix.asset_name }}.tar.gz.sha256
+          SHA256=$(shasum -a 256 ${{ matrix.asset_name }}.tar.gz | awk '{print $1}')
+          echo "${SHA256}" > ${{ matrix.asset_name }}.tar.gz.sha256
+          echo "SHA256 for ${{ matrix.asset_name }}.tar.gz: ${SHA256}"
           cat ${{ matrix.asset_name }}.tar.gz.sha256
           cd -
 
@@ -191,13 +193,16 @@ jobs:
           # Update the formula file in the tap (used by brew install)
           sed -i "s/version \".*\"/version \"$TARGET_VERSION\"/" tap/Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$TARGET_VERSION/|g" tap/Formula/qui.rb
-          sed -i "s/placeholder_macos_x86_64_sha256/$MACOS_X86_64_SHA/" tap/Formula/qui.rb
-          sed -i "s/placeholder_macos_aarch64_sha256/$MACOS_AARCH64_SHA/" tap/Formula/qui.rb
-          sed -i "s/placeholder_linux_x86_64_sha256/$LINUX_X86_64_SHA/" tap/Formula/qui.rb
+          sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" tap/Formula/qui.rb
+          sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" tap/Formula/qui.rb
+          sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" tap/Formula/qui.rb
 
           # Keep local Formula/qui.rb in sync (informational only)
           sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" Formula/qui.rb
+          sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" Formula/qui.rb
+          sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" Formula/qui.rb
+          sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" Formula/qui.rb
 
           # Show the updated formula
           echo "Updated formula:"

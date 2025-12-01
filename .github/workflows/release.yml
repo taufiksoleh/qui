@@ -80,9 +80,22 @@ jobs:
       - name: Generate SHA256 checksum
         run: |
           cd target/${{ matrix.target }}/release
+          # Verify the archive exists and is not empty
+          if [ ! -s "${{ matrix.asset_name }}.tar.gz" ]; then
+            echo "ERROR: ${{ matrix.asset_name }}.tar.gz is empty or does not exist!"
+            exit 1
+          fi
+
           SHA256=$(shasum -a 256 ${{ matrix.asset_name }}.tar.gz | awk '{print $1}')
           echo "${SHA256}" > ${{ matrix.asset_name }}.tar.gz.sha256
           echo "SHA256 for ${{ matrix.asset_name }}.tar.gz: ${SHA256}"
+
+          # Validate checksum is not empty and has correct format
+          if [ -z "$SHA256" ] || [ ${#SHA256} -ne 64 ]; then
+            echo "ERROR: Invalid SHA256 checksum: $SHA256"
+            exit 1
+          fi
+
           cat ${{ matrix.asset_name }}.tar.gz.sha256
           cd -
 
@@ -109,6 +122,7 @@ jobs:
           path: artifacts
 
       - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           files: |
@@ -119,6 +133,19 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Release
+        run: |
+          echo "Verifying release was created successfully..."
+          if [ -z "${{ steps.create_release.outputs.url }}" ]; then
+            echo "ERROR: Release creation failed or URL is not available"
+            exit 1
+          fi
+          echo "Release created successfully at: ${{ steps.create_release.outputs.url }}"
+          # Extract tag version from the release URL or use the git ref
+          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${VERSION#v}
+          echo "Release version: $VERSION"
 
   update-homebrew-formula:
     name: Update Homebrew Formula
@@ -163,7 +190,7 @@ jobs:
             # Update Cargo.toml if versions differ
             if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
               echo "Updating Cargo.toml version from $CARGO_VERSION to $TAG_VERSION"
-              sed -i.bak "s/^version = \".*\"/version = \"$TAG_VERSION\"/" Cargo.toml
+              sed -i "s/^version = \".*\"/version = \"$TAG_VERSION\"/" Cargo.toml
               git add Cargo.toml
               git config --local user.email "github-actions[bot]@users.noreply.github.com"
               git config --local user.name "github-actions[bot]"
@@ -188,44 +215,37 @@ jobs:
       - name: Update Homebrew Formula
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
+          echo "Updating Homebrew formulas to version $VERSION"
 
-          # Wait for release to be available, then fetch checksums from the GitHub Release
-          echo "Waiting for release to be available..."
-          sleep 30  # Give some time for the release to be processed
+          # Extract checksums from the pre-calculated .sha256 files from artifacts
+          # This ensures checksums match exactly what was uploaded to the release
+          echo "Reading checksums from artifact files..."
 
-          # Calculate checksums directly from the released binaries
-          echo "Calculating checksums from release v$VERSION binaries"
+          LINUX_X86_64_SHA=$(cat artifacts/qui-linux-x86_64/qui-linux-x86_64.tar.gz.sha256 | tr -d '\n')
+          MACOS_X86_64_SHA=$(cat artifacts/qui-macos-x86_64/qui-macos-x86_64.tar.gz.sha256 | tr -d '\n')
+          MACOS_AARCH64_SHA=$(cat artifacts/qui-macos-aarch64/qui-macos-aarch64.tar.gz.sha256 | tr -d '\n')
 
-          # Download and calculate checksum for each platform
-          curl -fsSL "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-linux-x86_64.tar.gz" | shasum -a 256 | awk '{print $1}' > /tmp/linux_sha256
-          curl -fsSL "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-x86_64.tar.gz" | shasum -a 256 | awk '{print $1}' > /tmp/macos_x86_64_sha256
-          curl -fsSL "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-aarch64.tar.gz" | shasum -a 256 | awk '{print $1}' > /tmp/macos_aarch64_sha256
-
-          LINUX_X86_64_SHA=$(cat /tmp/linux_sha256)
-          MACOS_X86_64_SHA=$(cat /tmp/macos_x86_64_sha256)
-          MACOS_AARCH64_SHA=$(cat /tmp/macos_aarch64_sha256)
-
-          echo "Calculated checksums:"
+          echo "Extracted checksums:"
           echo "Linux x86_64 SHA: $LINUX_X86_64_SHA"
           echo "macOS x86_64 SHA: $MACOS_X86_64_SHA"
           echo "macOS aarch64 SHA: $MACOS_AARCH64_SHA"
 
-          FORMULA_VERSION=$(grep -E '^\s*version\s+"' tap/Formula/qui.rb | sed -E 's/.*"([^\"]+)".*/\1/')
-          if [ -n "$FORMULA_VERSION" ]; then
-            TARGET_VERSION="$FORMULA_VERSION"
-          else
-            TARGET_VERSION="$VERSION"
+          # Validate that checksums are not empty
+          if [ -z "$LINUX_X86_64_SHA" ] || [ -z "$MACOS_X86_64_SHA" ] || [ -z "$MACOS_AARCH64_SHA" ]; then
+            echo "ERROR: One or more checksums are empty!"
+            exit 1
           fi
 
           # Update the formula file in the tap (used by brew install)
-          sed -i "s/version \".*\"/version \"$TARGET_VERSION\"/" tap/Formula/qui.rb
-          sed -i "s|releases/download/v[^/]*/|releases/download/v$TARGET_VERSION/|g" tap/Formula/qui.rb
+          echo "Updating external tap formula..."
+          sed -i "s/version \".*\"/version \"$VERSION\"/" tap/Formula/qui.rb
+          sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" tap/Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" tap/Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" tap/Formula/qui.rb
           sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" tap/Formula/qui.rb
 
           # Update local Formula/qui.rb in sync with tag version and checksums
-          echo "Updating local Formula/qui.rb to version $VERSION"
+          echo "Updating local formula..."
           sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" Formula/qui.rb
@@ -241,8 +261,11 @@ jobs:
           fi
 
           # Show the updated formula
-          echo "Updated formula:"
+          echo "Updated tap formula:"
           cat tap/Formula/qui.rb
+          echo ""
+          echo "Updated local formula:"
+          cat Formula/qui.rb
 
       - name: Warn when tap token missing
         if: ${{ env.HAS_TAP_TOKEN != 'true' }}
@@ -258,14 +281,47 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add Formula/qui.rb
-          git commit -m "Update QUI formula to v${{ steps.get_version.outputs.version }}" || echo "No changes to commit"
-          git remote set-url origin https://x-access-token:${TAP_TOKEN}@github.com/taufiksoleh/homebrew-qui.git
-          git push origin HEAD:main || git push origin HEAD:master
+
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No changes to commit in tap formula"
+          else
+            echo "Committing tap formula changes..."
+            git commit -m "Update QUI formula to v${{ steps.get_version.outputs.version }}"
+            git remote set-url origin https://x-access-token:${TAP_TOKEN}@github.com/taufiksoleh/homebrew-qui.git
+            git push origin HEAD:main || git push origin HEAD:master
+            echo "Tap formula updated successfully"
+          fi
 
       - name: Commit and push local formula sync
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add Formula/qui.rb
-          git commit -m "Sync local Formula/qui.rb to v${{ steps.get_version.outputs.version }}" || echo "No changes to commit"
-          git push origin HEAD:main || git push origin HEAD:master
+
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No changes to commit in local formula"
+          else
+            echo "Committing local formula changes..."
+            git commit -m "Sync local Formula/qui.rb to v${{ steps.get_version.outputs.version }}"
+            git push origin HEAD:main || git push origin HEAD:master
+            echo "Local formula updated successfully"
+          fi
+
+      - name: Validate formula syntax
+        run: |
+          echo "Validating updated formula syntax..."
+          # Test local formula syntax
+          if [ -f "Formula/qui.rb" ]; then
+            echo "Checking local formula syntax..."
+            ruby -c Formula/qui.rb || (echo "ERROR: Local formula syntax is invalid" && exit 1)
+          fi
+
+          # Test tap formula syntax (if we have access)
+          if [ -f "tap/Formula/qui.rb" ]; then
+            echo "Checking tap formula syntax..."
+            ruby -c tap/Formula/qui.rb || (echo "ERROR: Tap formula syntax is invalid" && exit 1)
+          fi
+
+          echo "Formula syntax validation passed"

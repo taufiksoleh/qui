@@ -240,17 +240,80 @@ jobs:
           echo "Updating external tap formula..."
           sed -i "s/version \".*\"/version \"$VERSION\"/" tap/Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" tap/Formula/qui.rb
+
+          # Replace placeholders first (if they exist)
           sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" tap/Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" tap/Formula/qui.rb
           sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" tap/Formula/qui.rb
+
+          # If placeholders weren't found, replace existing checksums using platform-specific approach
+          # This method targets each platform's checksum line specifically
+          python3 << 'EOF'
+          import re
+
+          # Read the current formula
+          with open('tap/Formula/qui.rb', 'r') as f:
+              content = f.read()
+
+          # Define replacement patterns for each platform
+          replacements = [
+              # macOS x86_64 - first on_macos block
+              (r'(macos-x86_64.*?sha256\s+")[^"]*(")', r'\1' + os.getenv('MACOS_X86_64_SHA') + r'\2'),
+              # macOS aarch64 - second on_macos block
+              (r'(macos-aarch64.*?sha256\s+")[^"]*(")', r'\1' + os.getenv('MACOS_AARCH64_SHA') + r'\2'),
+              # Linux x86_64 - on_linux block
+              (r'(linux-x86_64.*?sha256\s+")[^"]*(")', r'\1' + os.getenv('LINUX_X86_64_SHA') + r'\2'),
+          ]
+
+          # Apply replacements
+          for pattern, replacement in replacements:
+              content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+          # Write back
+          with open('tap/Formula/qui.rb', 'w') as f:
+              f.write(content)
+
+          print("Successfully updated tap formula checksums")
+          EOF
 
           # Update local Formula/qui.rb in sync with tag version and checksums
           echo "Updating local formula..."
           sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" Formula/qui.rb
+
+          # Replace placeholders in local formula
           sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" Formula/qui.rb
           sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" Formula/qui.rb
+
+          # Apply same Python-based replacements to local formula
+          python3 << 'EOF'
+          import re
+
+          # Read the current formula
+          with open('Formula/qui.rb', 'r') as f:
+              content = f.read()
+
+          # Define replacement patterns for each platform
+          replacements = [
+              # macOS x86_64
+              (r'(macos-x86_64.*?sha256\s+")[^"]*(")', r'\1' + os.getenv('MACOS_X86_64_SHA') + r'\2'),
+              # macOS aarch64
+              (r'(macos-aarch64.*?sha256\s+")[^"]*(")', r'\1' + os.getenv('MACOS_AARCH64_SHA') + r'\2'),
+              # Linux x86_64
+              (r'(linux-x86_64.*?sha256\s+")[^"]*(")', r'\1' + os.getenv('LINUX_X86_64_SHA') + r'\2'),
+          ]
+
+          # Apply replacements
+          for pattern, replacement in replacements:
+              content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
+          # Write back
+          with open('Formula/qui.rb', 'w') as f:
+              f.write(content)
+
+          print("Successfully updated local formula checksums")
+          EOF
 
           # Commit local formula updates if this is a tag release
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
@@ -260,7 +323,7 @@ jobs:
             git commit -m "chore(release): update local formula to v$VERSION with checksums" || echo "No local formula changes to commit"
           fi
 
-          # Show the updated formula
+          # Show the updated formulas
           echo "Updated tap formula:"
           cat tap/Formula/qui.rb
           echo ""

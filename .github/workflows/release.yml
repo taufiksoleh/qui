@@ -146,13 +146,22 @@ jobs:
         with:
           path: artifacts
 
-      - name: Extract version from tag
+      - name: Extract version from source
         id: get_version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          if [ -z "$VERSION" ] || [[ "$VERSION" == "$GITHUB_REF" ]]; then
-            VERSION=$(grep -E '^version\s*=\s*"' Cargo.toml | head -1 | sed -E 's/.*"([^\"]+)".*/\1/')
+          # Always use Cargo.toml version as source of truth
+          VERSION=$(grep -E '^version\s*=\s*"' Cargo.toml | head -1 | sed -E 's/.*"([^\"]+)".*/\1/')
+
+          # If this is a tag release, verify tag matches Cargo.toml version
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_VERSION=${GITHUB_REF#refs/tags/v}
+            if [ "$TAG_VERSION" != "$VERSION" ]; then
+              echo "Error: Tag version $TAG_VERSION does not match Cargo.toml version $VERSION"
+              echo "Please update Cargo.toml version or create matching tag"
+              exit 1
+            fi
           fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
@@ -176,10 +185,10 @@ jobs:
             MACOS_X86_64_SHA=$(awk '{print $1}' "$MACOS_X86_64_SHA_FILE")
             MACOS_AARCH64_SHA=$(awk '{print $1}' "$MACOS_AARCH64_SHA_FILE")
           else
-            echo "Artifacts not found; fetching checksums from release v$TARGET_VERSION"
-            curl -fsSL -o /tmp/qui-linux-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$TARGET_VERSION/qui-linux-x86_64.tar.gz.sha256"
-            curl -fsSL -o /tmp/qui-macos-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$TARGET_VERSION/qui-macos-x86_64.tar.gz.sha256"
-            curl -fsSL -o /tmp/qui-macos-aarch64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$TARGET_VERSION/qui-macos-aarch64.tar.gz.sha256"
+            echo "Artifacts not found; fetching checksums from release v$VERSION"
+            curl -fsSL -o /tmp/qui-linux-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-linux-x86_64.tar.gz.sha256"
+            curl -fsSL -o /tmp/qui-macos-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-x86_64.tar.gz.sha256"
+            curl -fsSL -o /tmp/qui-macos-aarch64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-aarch64.tar.gz.sha256"
             LINUX_X86_64_SHA=$(awk '{print $1}' /tmp/qui-linux-x86_64.tar.gz.sha256)
             MACOS_X86_64_SHA=$(awk '{print $1}' /tmp/qui-macos-x86_64.tar.gz.sha256)
             MACOS_AARCH64_SHA=$(awk '{print $1}' /tmp/qui-macos-aarch64.tar.gz.sha256)
@@ -197,7 +206,7 @@ jobs:
           sed -i "s/PLACEHOLDER_MACOS_AARCH64_SHA256/$MACOS_AARCH64_SHA/" tap/Formula/qui.rb
           sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/$LINUX_X86_64_SHA/" tap/Formula/qui.rb
 
-          # Keep local Formula/qui.rb in sync (informational only)
+          # Keep local Formula/qui.rb in sync (use Cargo.toml version)
           sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/qui.rb
           sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" Formula/qui.rb
           sed -i "s/PLACEHOLDER_MACOS_X86_64_SHA256/$MACOS_X86_64_SHA/" Formula/qui.rb

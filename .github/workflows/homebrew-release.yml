@@ -1,0 +1,170 @@
+name: Homebrew Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: qui-linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset_name: qui-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: qui-macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build
+        run: |
+          set -euo pipefail
+          cargo build --release --target ${{ matrix.target }}
+          strip target/${{ matrix.target }}/release/qui || true
+      - name: Archive
+        run: |
+          set -euo pipefail
+          cd target/${{ matrix.target }}/release
+          tar -czf ${{ matrix.asset_name }}.tar.gz qui
+      - name: SHA256
+        run: |
+          set -euo pipefail
+          cd target/${{ matrix.target }}/release
+          SHA256=$(shasum -a 256 ${{ matrix.asset_name }}.tar.gz | awk '{print $1}')
+          echo "$SHA256" > ${{ matrix.asset_name }}.tar.gz.sha256
+          test ${#SHA256} -eq 64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: |
+            target/${{ matrix.target }}/release/${{ matrix.asset_name }}.tar.gz
+            target/${{ matrix.target }}/release/${{ matrix.asset_name }}.tar.gz.sha256
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create Release
+        id: ghrel
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.sha256
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify Release URL
+        run: test -n "${{ steps.ghrel.outputs.url }}"
+
+  get-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect version
+        id: v
+        run: |
+          python3 .github/scripts/homebrew_release.py detect-version
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+
+  verify-checksums:
+    needs: [release, get-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Verify release asset checksums
+        env:
+          VERSION: ${{ needs.get-version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          export ARTIFACTS=artifacts
+          python3 .github/scripts/homebrew_release.py verify-checksums
+
+  update-formula:
+    needs: [verify-checksums, get-version]
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      VERSION: ${{ needs.get-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: actions/checkout@v4
+        with:
+          repository: taufiksoleh/homebrew-qui
+          token: ${{ env.TAP_TOKEN }}
+          path: tap
+      - name: Update local formula
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          export ARTIFACTS=artifacts
+          python3 .github/scripts/homebrew_release.py update-formula --tap-path tap
+
+  brew-test:
+    needs: update-formula
+    runs-on: ${{ matrix.macos }}
+    strategy:
+      fail-fast: false
+      matrix:
+        macos: [macos-13, macos-15]
+    steps:
+      - name: Prepare Homebrew
+        run: |
+          set -euo pipefail
+          brew --version
+          export HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ANALYTICS=1
+          brew update-reset
+          brew untap taufiksoleh/qui || true
+      - name: Install via tap
+        run: |
+          set -euo pipefail
+          brew tap taufiksoleh/qui
+          brew install taufiksoleh/qui/qui
+      - name: Validate binary
+        run: |
+          set -euo pipefail
+          command -v qui
+          qui --version || true

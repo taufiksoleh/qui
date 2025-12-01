@@ -157,6 +157,12 @@ jobs:
       - name: Update Homebrew Formula
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
+          FORMULA_VERSION=$(grep -E '^\s*version\s+"' tap/Formula/qui.rb | sed -E 's/.*"([^\"]+)".*/\1/')
+          if [ -n "$FORMULA_VERSION" ]; then
+            TARGET_VERSION="$FORMULA_VERSION"
+          else
+            TARGET_VERSION="$VERSION"
+          fi
 
           # Try reading checksums from build artifacts; if missing, fetch from the GitHub Release
           LINUX_X86_64_SHA_FILE="artifacts/qui-linux-x86_64/qui-linux-x86_64.tar.gz.sha256"
@@ -168,10 +174,10 @@ jobs:
             MACOS_X86_64_SHA=$(awk '{print $1}' "$MACOS_X86_64_SHA_FILE")
             MACOS_AARCH64_SHA=$(awk '{print $1}' "$MACOS_AARCH64_SHA_FILE")
           else
-            echo "Artifacts not found; fetching checksums from release v$VERSION"
-            curl -fsSL -o /tmp/qui-linux-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-linux-x86_64.tar.gz.sha256"
-            curl -fsSL -o /tmp/qui-macos-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-x86_64.tar.gz.sha256"
-            curl -fsSL -o /tmp/qui-macos-aarch64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-aarch64.tar.gz.sha256"
+            echo "Artifacts not found; fetching checksums from release v$TARGET_VERSION"
+            curl -fsSL -o /tmp/qui-linux-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$TARGET_VERSION/qui-linux-x86_64.tar.gz.sha256"
+            curl -fsSL -o /tmp/qui-macos-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$TARGET_VERSION/qui-macos-x86_64.tar.gz.sha256"
+            curl -fsSL -o /tmp/qui-macos-aarch64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$TARGET_VERSION/qui-macos-aarch64.tar.gz.sha256"
             LINUX_X86_64_SHA=$(awk '{print $1}' /tmp/qui-linux-x86_64.tar.gz.sha256)
             MACOS_X86_64_SHA=$(awk '{print $1}' /tmp/qui-macos-x86_64.tar.gz.sha256)
             MACOS_AARCH64_SHA=$(awk '{print $1}' /tmp/qui-macos-aarch64.tar.gz.sha256)
@@ -183,8 +189,8 @@ jobs:
           echo "macOS aarch64 SHA: $MACOS_AARCH64_SHA"
 
           # Update the formula file in the tap (used by brew install)
-          sed -i "s/version \".*\"/version \"$VERSION\"/" tap/Formula/qui.rb
-          sed -i "s|releases/download/v[^/]*/|releases/download/v$VERSION/|g" tap/Formula/qui.rb
+          sed -i "s/version \".*\"/version \"$TARGET_VERSION\"/" tap/Formula/qui.rb
+          sed -i "s|releases/download/v[^/]*/|releases/download/v$TARGET_VERSION/|g" tap/Formula/qui.rb
           sed -i "s/placeholder_macos_x86_64_sha256/$MACOS_X86_64_SHA/" tap/Formula/qui.rb
           sed -i "s/placeholder_macos_aarch64_sha256/$MACOS_AARCH64_SHA/" tap/Formula/qui.rb
           sed -i "s/placeholder_linux_x86_64_sha256/$LINUX_X86_64_SHA/" tap/Formula/qui.rb

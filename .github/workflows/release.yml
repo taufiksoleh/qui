@@ -120,7 +120,7 @@ jobs:
 
   update-homebrew-formula:
     name: Update Homebrew Formula
-    needs: release
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     env:
@@ -158,10 +158,24 @@ jobs:
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
 
-          # Read SHA256 checksums
-          LINUX_X86_64_SHA=$(cat artifacts/qui-linux-x86_64/qui-linux-x86_64.tar.gz.sha256 | awk '{print $1}')
-          MACOS_X86_64_SHA=$(cat artifacts/qui-macos-x86_64/qui-macos-x86_64.tar.gz.sha256 | awk '{print $1}')
-          MACOS_AARCH64_SHA=$(cat artifacts/qui-macos-aarch64/qui-macos-aarch64.tar.gz.sha256 | awk '{print $1}')
+          # Try reading checksums from build artifacts; if missing, fetch from the GitHub Release
+          LINUX_X86_64_SHA_FILE="artifacts/qui-linux-x86_64/qui-linux-x86_64.tar.gz.sha256"
+          MACOS_X86_64_SHA_FILE="artifacts/qui-macos-x86_64/qui-macos-x86_64.tar.gz.sha256"
+          MACOS_AARCH64_SHA_FILE="artifacts/qui-macos-aarch64/qui-macos-aarch64.tar.gz.sha256"
+
+          if [ -f "$LINUX_X86_64_SHA_FILE" ] && [ -f "$MACOS_X86_64_SHA_FILE" ] && [ -f "$MACOS_AARCH64_SHA_FILE" ]; then
+            LINUX_X86_64_SHA=$(awk '{print $1}' "$LINUX_X86_64_SHA_FILE")
+            MACOS_X86_64_SHA=$(awk '{print $1}' "$MACOS_X86_64_SHA_FILE")
+            MACOS_AARCH64_SHA=$(awk '{print $1}' "$MACOS_AARCH64_SHA_FILE")
+          else
+            echo "Artifacts not found; fetching checksums from release v$VERSION"
+            curl -fsSL -o /tmp/qui-linux-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-linux-x86_64.tar.gz.sha256"
+            curl -fsSL -o /tmp/qui-macos-x86_64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-x86_64.tar.gz.sha256"
+            curl -fsSL -o /tmp/qui-macos-aarch64.tar.gz.sha256 "https://github.com/taufiksoleh/qui/releases/download/v$VERSION/qui-macos-aarch64.tar.gz.sha256"
+            LINUX_X86_64_SHA=$(awk '{print $1}' /tmp/qui-linux-x86_64.tar.gz.sha256)
+            MACOS_X86_64_SHA=$(awk '{print $1}' /tmp/qui-macos-x86_64.tar.gz.sha256)
+            MACOS_AARCH64_SHA=$(awk '{print $1}' /tmp/qui-macos-aarch64.tar.gz.sha256)
+          fi
 
           echo "Updating formula with version $VERSION"
           echo "Linux x86_64 SHA: $LINUX_X86_64_SHA"

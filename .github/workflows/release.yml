@@ -177,7 +177,7 @@ jobs:
         id: get_version
         run: |
           # If this is a tag release, use tag version and update files
-          if [[ "$GITHUB_REF" == refs/tags/* ]] ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             # Extract version from tag (remove 'v' prefix if present)
             TAG_VERSION=${GITHUB_REF#refs/tags/}
             TAG_VERSION=${TAG_VERSION#v}
@@ -318,7 +318,7 @@ jobs:
           EOF
 
           # Commit local formula updates if this is a tag release
-          if [[ "$GITHUB_REF" == refs/tags/* ]] ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             git add Formula/qui.rb
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"

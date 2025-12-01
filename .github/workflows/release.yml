@@ -133,7 +133,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: taufiksoleh/homebrew-qui
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
       - name: Download all artifacts
@@ -180,13 +180,24 @@ jobs:
           echo "Updated formula:"
           cat tap/Formula/qui.rb
 
+      - name: Warn when tap token missing
+        if: ${{ !secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          echo "TAP_GITHUB_TOKEN secret is not set."
+          echo "Create a PAT with 'repo' scope and add it as TAP_GITHUB_TOKEN in this repo's Actions secrets."
+          echo "Without this, the pipeline cannot push updates to taufiksoleh/homebrew-qui."
+
       - name: Commit and push tap formula update
+        if: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           cd tap
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add Formula/qui.rb
           git commit -m "Update QUI formula to v${{ steps.get_version.outputs.version }}" || echo "No changes to commit"
+          git remote set-url origin https://x-access-token:${TAP_TOKEN}@github.com/taufiksoleh/homebrew-qui.git
           git push origin HEAD:main || git push origin HEAD:master
 
       - name: Commit and push local formula sync

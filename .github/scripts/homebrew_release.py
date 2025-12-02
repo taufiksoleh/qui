@@ -114,18 +114,36 @@ def update_tap(tap_path, version):
     r = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=tap_path)
     if r.returncode != 0:
         run(["git", "commit", "-m", f"Update QUI formula to v{version}"], cwd=tap_path)
-        if run_rc(["git", "push", "origin", "HEAD:main"], cwd=tap_path) != 0:
-            run(["git", "push", "origin", "HEAD:master"], cwd=tap_path)
+        # Get current branch name
+        branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=tap_path).strip()
+        # Pull with rebase to handle any remote changes
+        run(["git", "pull", "--rebase", "origin", branch], cwd=tap_path)
+        # Push to the current branch
+        run(["git", "push", "origin", branch], cwd=tap_path)
     else:
         print("No tap changes")
 
 def commit_local(version):
-    run(["git", "-c", "user.email=github-actions[bot]@users.noreply.github.com", "-c", "user.name=github-actions[bot]", "add", "Formula/qui.rb"]) 
-    r = subprocess.run(["git", "diff", "--cached", "--quiet"]) 
+    # Get the default branch (usually main or master)
+    default_branch = run(["git", "remote", "show", "origin"]).strip()
+    branch_match = None
+    for line in default_branch.split("\n"):
+        if "HEAD branch:" in line:
+            branch_match = line.split(":")[-1].strip()
+            break
+    if not branch_match:
+        branch_match = "main"  # Fallback to main
+
+    # Check out the default branch
+    run(["git", "fetch", "origin", branch_match])
+    run(["git", "checkout", branch_match])
+    run(["git", "pull", "origin", branch_match])
+
+    run(["git", "-c", "user.email=github-actions[bot]@users.noreply.github.com", "-c", "user.name=github-actions[bot]", "add", "Formula/qui.rb"])
+    r = subprocess.run(["git", "diff", "--cached", "--quiet"])
     if r.returncode != 0:
-        run(["git", "commit", "-m", f"Sync local Formula/qui.rb to v{version}"]) 
-        if run_rc(["git", "push", "origin", "HEAD:main"]) != 0:
-            run(["git", "push", "origin", "HEAD:master"]) 
+        run(["git", "commit", "-m", f"Sync local Formula/qui.rb to v{version}"])
+        run(["git", "push", "origin", branch_match])
     else:
         print("No local changes")
 
@@ -167,16 +185,10 @@ def main():
             print("version not found in Cargo.toml")
             sys.exit(1)
         current = m.group(1)
+        # Use tag version if present, otherwise use Cargo.toml version
+        version_out = tag if tag else current
         if tag and tag != current:
-            new = re.sub(r'^version\s*=\s*"([^"]+)"', f'version = "{tag}"', cargo, flags=re.MULTILINE)
-            Path("Cargo.toml").write_text(new)
-            run(["git", "add", "Cargo.toml"]) 
-            run(["git", "-c", "user.email=github-actions[bot]@users.noreply.github.com", "-c", "user.name=github-actions[bot]", "commit", "-m", f"chore(release): bump version to {tag}"]) 
-            if run_rc(["git", "push", "origin", "HEAD:main"]) != 0:
-                run(["git", "push", "origin", "HEAD:master"]) 
-            version_out = tag
-        else:
-            version_out = current
+            print(f"Warning: Tag version {tag} differs from Cargo.toml version {current}")
         out = os.environ.get("GITHUB_OUTPUT")
         if not out:
             print("GITHUB_OUTPUT not set")

@@ -106,11 +106,15 @@ end
     print("Updated Formula/qui.rb with version and checksums")
 
 def update_tap(tap_path, version):
+    # Configure git identity in the tap repo
+    run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=tap_path)
+    run(["git", "config", "user.name", "github-actions[bot]"], cwd=tap_path)
+
     src = Path("Formula/qui.rb")
     dst = Path(tap_path) / "Formula" / "qui.rb"
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dst)
-    run(["git", "-c", "user.email=github-actions[bot]@users.noreply.github.com", "-c", "user.name=github-actions[bot]", "add", "Formula/qui.rb"], cwd=tap_path)
+    run(["git", "add", "Formula/qui.rb"], cwd=tap_path)
     r = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=tap_path)
     if r.returncode != 0:
         run(["git", "commit", "-m", f"Update QUI formula to v{version}"], cwd=tap_path)
@@ -124,6 +128,10 @@ def update_tap(tap_path, version):
         print("No tap changes")
 
 def commit_local(version):
+    # Configure git identity globally for this run
+    run(["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"])
+    run(["git", "config", "--global", "user.name", "github-actions[bot]"])
+
     # Get the default branch (usually main or master)
     default_branch = run(["git", "remote", "show", "origin"]).strip()
     branch_match = None
@@ -139,7 +147,7 @@ def commit_local(version):
     run(["git", "checkout", branch_match])
     run(["git", "pull", "origin", branch_match])
 
-    run(["git", "-c", "user.email=github-actions[bot]@users.noreply.github.com", "-c", "user.name=github-actions[bot]", "add", "Formula/qui.rb"])
+    run(["git", "add", "Formula/qui.rb"])
     r = subprocess.run(["git", "diff", "--cached", "--quiet"])
     if r.returncode != 0:
         run(["git", "commit", "-m", f"Sync local Formula/qui.rb to v{version}"])

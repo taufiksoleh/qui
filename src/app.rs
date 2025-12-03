@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::events::InputEvent;
 use crate::kube_client::{
-    ContextInfo, DeploymentInfo, KubeClient, PodInfo, ServiceInfo, TerminalSession,
+    ContextInfo, DeploymentInfo, KubeClient, PodInfo, PodWatcher, ServiceInfo, TerminalSession,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,6 +53,9 @@ pub struct App {
     pub terminal_pod_name: Option<String>,
     pub terminal_scroll: usize,
     pub terminal_choice_selection: usize,
+    // Pod watcher for realtime updates
+    pub pod_watcher: Option<PodWatcher>, // Assuming PodWatcher is defined elsewhere
+    pub auto_refresh_enabled: bool,
 }
 
 impl App {
@@ -139,6 +142,8 @@ impl App {
             terminal_pod_name: None,
             terminal_scroll: 0,
             terminal_choice_selection: 0,
+            pod_watcher: None,
+            auto_refresh_enabled: false,
         };
 
         // Only try to refresh if we don't have an error
@@ -473,17 +478,38 @@ impl App {
     async fn refresh_current_view(&mut self) -> Result<()> {
         self.error_message = None;
         match self.current_view {
-            View::Pods => match self.client.list_pods(&self.current_namespace).await {
-                Ok(pods) => {
-                    self.pods = pods;
-                    if self.pod_index >= self.pods.len() {
-                        self.pod_index = self.pods.len().saturating_sub(1);
+            View::Pods => {
+                // Start watcher if not already running
+                if self.pod_watcher.is_none() {
+                    match self.client.watch_pods(&self.current_namespace).await {
+                        Ok(watcher) => {
+                            self.pod_watcher = Some(watcher);
+                            self.auto_refresh_enabled = true;
+                        }
+                        Err(e) => {
+                            // Fallback to manual refresh if watch fails
+                            self.error_message = Some(format!(
+                                "Watch API failed (using manual refresh): {}. Press 'r' to refresh manually.",
+                                e
+                            ));
+                            self.auto_refresh_enabled = false;
+                        }
                     }
                 }
-                Err(e) => {
-                    self.error_message = Some(format!("Failed to list pods: {}", e));
+
+                // Initial fetch
+                match self.client.list_pods(&self.current_namespace).await {
+                    Ok(pods) => {
+                        self.pods = pods;
+                        if self.pod_index >= self.pods.len() {
+                            self.pod_index = self.pods.len().saturating_sub(1);
+                        }
+                    }
+                    Err(e) => {
+                        self.error_message = Some(format!("Failed to list pods: {}", e));
+                    }
                 }
-            },
+            }
             View::Deployments => {
                 match self.client.list_deployments(&self.current_namespace).await {
                     Ok(deployments) => {
@@ -697,7 +723,8 @@ impl App {
     }
 
     async fn switch_to_selected_namespace(&mut self) -> Result<()> {
-        if let Some(namespace) = self.namespaces.get(self.namespace_index) {
+        if let Some(namespace) = self.namespaces.get(self.namespace_index).cloned() {
+            self.cleanup_pod_watcher(); // Stop watching old namespace
             self.current_namespace = namespace.clone();
             self.status_message = format!("Switched to namespace: {}", namespace);
             self.current_view = View::Pods;
@@ -705,6 +732,7 @@ impl App {
         }
         Ok(())
     }
+
 
     async fn exec_into_pod(&mut self) -> Result<()> {
         if self.pods.get(self.pod_index).is_some() {
@@ -786,6 +814,27 @@ impl App {
         // The actual work is done in get_terminal_screen()
     }
 
+    /// Try to receive pod updates from the watcher (non-blocking)
+    pub fn try_update_pods(&mut self) {
+        if let Some(watcher) = &mut self.pod_watcher {
+            // Try to receive updates without blocking
+            if let Ok(updated_pods) = watcher.rx.try_recv() {
+                self.pods = updated_pods;
+                
+                // Adjust selection if pods were removed
+                if self.pod_index >= self.pods.len() && !self.pods.is_empty() {
+                    self.pod_index = self.pods.len().saturating_sub(1);
+                }
+            }
+        }
+    }
+
+    /// Clean up pod watcher to prevent memory leaks
+    fn cleanup_pod_watcher(&mut self) {
+        self.pod_watcher = None;
+        self.auto_refresh_enabled = false;
+    }
+
     async fn navigate_tab_left(&mut self) -> Result<()> {
         let tabs = [
             View::Pods,
@@ -802,6 +851,12 @@ impl App {
             } else {
                 current_index - 1
             };
+            
+            // Cleanup pod watcher if leaving pods view
+            if self.current_view == View::Pods && tabs[new_index] != View::Pods {
+                self.cleanup_pod_watcher();
+            }
+            
             self.current_view = tabs[new_index];
             self.refresh_current_view().await?;
         }
@@ -820,15 +875,16 @@ impl App {
         ];
 
         if let Some(current_index) = tabs.iter().position(|&v| v == self.current_view) {
-            let new_index = if current_index == tabs.len() - 1 {
-                0
-            } else {
-                current_index + 1
-            };
+            let new_index = (current_index + 1) % tabs.len();
+            
+            // Cleanup pod watcher if leaving pods view
+            if self.current_view == View::Pods && tabs[new_index] != View::Pods {
+                self.cleanup_pod_watcher();
+            }
+            
             self.current_view = tabs[new_index];
             self.refresh_current_view().await?;
         }
-
         Ok(())
     }
 

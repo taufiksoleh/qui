@@ -1,19 +1,23 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyModifiers};
+use futures::TryStreamExt;
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::core::v1::{Namespace, Pod, Service};
 use kube::{
     api::{Api, DeleteParams, ListParams, LogParams},
+    runtime::{watcher, WatchStreamExt},
     Client,
 };
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+use tokio::sync::mpsc as tokio_mpsc;
 use vt100::Parser;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -269,10 +273,53 @@ end tell"#,
                 return Ok(());
             }
         }
-
         anyhow::bail!("Could not find a suitable terminal emulator. Please install gnome-terminal, konsole, xfce4-terminal, or xterm.");
     }
 }
+
+// Pod watcher for realtime updates
+pub struct PodWatcher {
+    pub rx: tokio_mpsc::UnboundedReceiver<Vec<PodInfo>>,
+}
+
+impl KubeClient {
+    /// Start watching pods in the given namespace for realtime updates
+    pub async fn watch_pods(&self, namespace: &str) -> Result<PodWatcher> {
+        let api: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
+        let (tx, rx) = tokio_mpsc::unbounded_channel();
+        
+        let watcher_config = watcher::Config::default()
+            .timeout(60); // Timeout after 60s of inactivity, will auto-reconnect
+        
+        // Spawn background task to watch pods
+        tokio::spawn(async move {
+            let stream = watcher(api, watcher_config).applied_objects();
+            let mut stream = Box::pin(stream);
+            let mut pods_cache: HashMap<String, PodInfo> = HashMap::new();
+            
+            while let Ok(Some(pod)) = stream.try_next().await {
+                let pod_info = PodInfo::from_pod(&pod);
+                let pod_name = pod_info.name.clone();
+                
+                // Update cache
+                pods_cache.insert(pod_name, pod_info);
+                
+                // Send updated pod list
+                let mut pod_list: Vec<PodInfo> = pods_cache.values().cloned().collect();
+                // Sort by name for consistent ordering
+                pod_list.sort_by(|a, b| a.name.cmp(&b.name));
+                
+                if tx.send(pod_list).is_err() {
+                    // Receiver dropped, exit watcher
+                    break;
+                }
+            }
+        });
+        
+        Ok(PodWatcher { rx })
+    }
+}
+
 
 pub struct TerminalSession {
     parser: Parser,

@@ -733,7 +733,6 @@ impl App {
         Ok(())
     }
 
-
     async fn exec_into_pod(&mut self) -> Result<()> {
         if self.pods.get(self.pod_index).is_some() {
             // Show terminal choice menu
@@ -820,7 +819,7 @@ impl App {
             // Try to receive updates without blocking
             if let Ok(updated_pods) = watcher.rx.try_recv() {
                 self.pods = updated_pods;
-                
+
                 // Adjust selection if pods were removed
                 if self.pod_index >= self.pods.len() && !self.pods.is_empty() {
                     self.pod_index = self.pods.len().saturating_sub(1);
@@ -851,12 +850,12 @@ impl App {
             } else {
                 current_index - 1
             };
-            
+
             // Cleanup pod watcher if leaving pods view
             if self.current_view == View::Pods && tabs[new_index] != View::Pods {
                 self.cleanup_pod_watcher();
             }
-            
+
             self.current_view = tabs[new_index];
             self.refresh_current_view().await?;
         }
@@ -876,12 +875,12 @@ impl App {
 
         if let Some(current_index) = tabs.iter().position(|&v| v == self.current_view) {
             let new_index = (current_index + 1) % tabs.len();
-            
+
             // Cleanup pod watcher if leaving pods view
             if self.current_view == View::Pods && tabs[new_index] != View::Pods {
                 self.cleanup_pod_watcher();
             }
-            
+
             self.current_view = tabs[new_index];
             self.refresh_current_view().await?;
         }

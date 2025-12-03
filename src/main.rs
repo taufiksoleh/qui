@@ -55,7 +55,7 @@ async fn run_app<B: ratatui::backend::Backend>(
     let log_refresh_interval = Duration::from_secs(2); // Refresh logs every 2 seconds
     let mut last_terminal_refresh = Instant::now();
     let terminal_refresh_interval = Duration::from_millis(50); // Refresh terminal every 50ms for smooth updates
-    
+
     // New: Track last pod update check
     let mut last_pod_update = Instant::now();
     let pod_update_interval = Duration::from_millis(100); // Check for pod updates every 100ms
@@ -66,7 +66,7 @@ async fn run_app<B: ratatui::backend::Backend>(
             app.try_update_pods();
             last_pod_update = Instant::now();
         }
-        
+
         terminal.draw(|f| ui(f, &mut app))?;
 
         // Refresh logs if in follow mode and enough time has passed

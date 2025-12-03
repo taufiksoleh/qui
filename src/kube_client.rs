@@ -287,39 +287,37 @@ impl KubeClient {
     pub async fn watch_pods(&self, namespace: &str) -> Result<PodWatcher> {
         let api: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
         let (tx, rx) = tokio_mpsc::unbounded_channel();
-        
-        let watcher_config = watcher::Config::default()
-            .timeout(60); // Timeout after 60s of inactivity, will auto-reconnect
-        
+
+        let watcher_config = watcher::Config::default().timeout(60); // Timeout after 60s of inactivity, will auto-reconnect
+
         // Spawn background task to watch pods
         tokio::spawn(async move {
             let stream = watcher(api, watcher_config).applied_objects();
             let mut stream = Box::pin(stream);
             let mut pods_cache: HashMap<String, PodInfo> = HashMap::new();
-            
+
             while let Ok(Some(pod)) = stream.try_next().await {
                 let pod_info = PodInfo::from_pod(&pod);
                 let pod_name = pod_info.name.clone();
-                
+
                 // Update cache
                 pods_cache.insert(pod_name, pod_info);
-                
+
                 // Send updated pod list
                 let mut pod_list: Vec<PodInfo> = pods_cache.values().cloned().collect();
                 // Sort by name for consistent ordering
                 pod_list.sort_by(|a, b| a.name.cmp(&b.name));
-                
+
                 if tx.send(pod_list).is_err() {
                     // Receiver dropped, exit watcher
                     break;
                 }
             }
         });
-        
+
         Ok(PodWatcher { rx })
     }
 }
-
 
 pub struct TerminalSession {
     parser: Parser,

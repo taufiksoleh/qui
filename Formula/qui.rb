@@ -1,23 +1,23 @@
 class Qui < Formula
   desc "Kubernetes Terminal UI - An intuitive TUI for managing Kubernetes clusters"
   homepage "https://github.com/taufiksoleh/qui"
-  version "0.0.11"
+  version "0.0.12"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/taufiksoleh/qui/releases/download/v0.0.11/qui-macos-x86_64.tar.gz"
-      sha256 "8200bcb74940befab496381a5aba05652e4f97813b94d5b5bfe214e1ce39c232"
+      url "https://github.com/taufiksoleh/qui/releases/download/v0.0.12/qui-macos-x86_64.tar.gz"
+      sha256 "58e92f9efc9ade057079e51854052d5e6af5d396b8a98d7dfec3a8e31fbc5ae3"
     elsif Hardware::CPU.arm?
-      url "https://github.com/taufiksoleh/qui/releases/download/v0.0.11/qui-macos-aarch64.tar.gz"
-      sha256 "7b0f395ddb576055fced3e73df6dc3079838de1a3e84b9364e3b38b9696ad889"
+      url "https://github.com/taufiksoleh/qui/releases/download/v0.0.12/qui-macos-aarch64.tar.gz"
+      sha256 "5aadd2e93382021283432c79fa05012285c52287c9e29c7cc4b6aaee6ed88b2b"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/taufiksoleh/qui/releases/download/v0.0.11/qui-linux-x86_64.tar.gz"
-      sha256 "758d932f9d3732cdcb6b76ea678877f85b503788c74d86b736cc317f78e63f65"
+      url "https://github.com/taufiksoleh/qui/releases/download/v0.0.12/qui-linux-x86_64.tar.gz"
+      sha256 "c02927345921076b1d6ab732d9ce5ffe48ddd97cf23841fa33b37435e54aedcd"
     end
   end
 
